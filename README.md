@@ -1,4 +1,4 @@
-# Weekly Planner and Beyond
+# Weekly Planner
 
 A weekly planner that goes beyond just scheduling stuff. It combines goal tracking, habit streaks, location awareness, travel time, screen time, step count, calendar sync and deadline warnings into one app. It then checks whether you actually did what you planned, including what you did instead if you didn't stick to it.
 
