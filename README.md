@@ -1,50 +1,91 @@
-# Welcome to your Expo app 👋
+# Weekly Planner and Beyond
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A weekly planner that goes beyond just scheduling stuff. It combines goal tracking, habit streaks, location awareness, travel time, screen time, step count, calendar sync and deadline warnings into one app. It then checks whether you actually did what you planned, including what you did instead if you didn't stick to it.
 
-## Get started
+It's built for people who like to plan their week down to the hour and for people who plan well but struggle to follow through.
 
-1. Install dependencies
+## Team
 
-   ```bash
-   npm install
-   ```
+Built for our **Software Development Practice** project by:
 
-2. Start the app
+- Brayden
+- Ryan
+- Jason
+- Chamithu
+- Selah
 
-   ```bash
-   npx expo start
-   ```
+## Why We're Building This
 
-In the output, you'll find options to open the app in a
+Most planner apps just track what you say you did and most habit trackers stop at setting a goal. We wanted something that actually closes the gap between the plan and reality. It flags when a plan isn't realistic, like not enough travel time or too much workload, checks whether it actually happened and builds habits off the same data instead of adding a separate tracker for everything.
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Tech Stack
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- **React Native** with **Expo** (SDK 54)
+- **Expo Router** for navigation
+- **Jest** and **React Native Testing Library** for testing
+- **Trello** for our scrum board
 
-## Get a fresh project
+## Getting Started
 
-When you're ready, run:
+### You'll need
 
-```bash
-npm run reset-project
-```
+- [Node.js](https://nodejs.org) (LTS version)
+- [Expo Go](https://expo.dev/go) installed on your phone if you want to test on a real device
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Setup
 
-## Learn more
+\`\`\`bash
+git clone <https://github.com/YOUR-USERNAME/WeeklyPlanner.git>
+cd WeeklyPlanner
+npm install
+npx expo start
+\`\`\`
 
-To learn more about developing your project with Expo, look at the following resources:
+Scan the QR code with Expo Go, or press `w` for web, `a` for Android emulator or `i` for iOS simulator (Mac only).
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## What's In It
 
-## Join the community
+### Planning
 
-Join our community of developers creating universal apps.
+- One weekly view for study, workout, work and personal tasks
+- Checklist box you can drag tasks out of into the schedule
+- Recurring tasks that repeat daily, weekly or on specific days
+- Goals per category, with the app showing the gap between the goal and what's actually scheduled
+- Warnings when a deadline is coming up and nothing's been scheduled for it
+- Travel time checks between back-to-back location-based tasks
+- Syncs with an external calendar
+- Suggests tasks at the start of a new week based on what you've done before
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+### Verification
+
+- Geofencing detects when you've arrived at a location-tagged task
+- Flip a task card after the time block to log what actually happened, whether that's done, done differently or a quick note
+- A simple checkbox is still there for tasks that don't need all that detail
+- Screen time and step count are used as extra signals, not the only source of truth
+
+### Review
+
+- Weekly summary comparing planned versus actual, per category
+- How you're tracking against your original goals, not just this week's plan
+- Screen time trend shown next to completion rate so you can spot the correlation
+- Habit streaks with grace-period rules so one bad day doesn't wipe your streak
+
+## Sprint Priorities
+
+| Priority                   | What's in it                                                                                                   |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **Must-Have (Sprint 1)**   | Weekly planner UI, checklist drag-and-drop, recurring tasks, basic checkbox, flip-card tracking, weekly review |
+| **Should-Have (Sprint 2)** | Goal gap tracking, deadline warnings, habit streaks, geofence completion, travel time calculation              |
+| **Nice-to-Have (stretch)** | Calendar sync, screen time, step count, weather suggestions, predictive autofill                               |
+
+## Working Together
+
+- Branch per feature: `git checkout -b feature/your-feature-name`
+- Open a PR before merging into `main`
+- Backlog and sprint tracking on Trello
+
+## Privacy
+
+Location data is sensitive, so users can turn off location sharing whenever they want. Location history only sticks around for a limited time unless they choose to keep it.
+
+Location data is sensitive, so users can turn off location sharing whenever they want. Location history only sticks around for a limited time unless they choose to keep it.
