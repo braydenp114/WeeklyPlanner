@@ -34,12 +34,13 @@ Most planner apps just track what you say you did and most habit trackers stop a
 
 ### Setup
 
-\`\`\`bash
-git clone <https://github.com/YOUR-USERNAME/WeeklyPlanner.git>
-cd WeeklyPlanner
-npm install
-npx expo start
-\`\`\`
+Clone the repo: ```bash git clone https://github.com/YOUR-USERNAME/WeeklyPlanner.git ```
+
+Move into the project folder: ```bash cd WeeklyPlanner ```
+
+Install the dependencies: ```bash npm install ```
+
+Start the dev server: ```bash npx expo start ```
 
 Scan the QR code with Expo Go, or press `w` for web, `a` for Android emulator or `i` for iOS simulator (Mac only).
 
@@ -85,7 +86,5 @@ Scan the QR code with Expo Go, or press `w` for web, `a` for Android emulator or
 - Backlog and sprint tracking on Trello
 
 ## Privacy
-
-Location data is sensitive, so users can turn off location sharing whenever they want. Location history only sticks around for a limited time unless they choose to keep it.
 
 Location data is sensitive, so users can turn off location sharing whenever they want. Location history only sticks around for a limited time unless they choose to keep it.
