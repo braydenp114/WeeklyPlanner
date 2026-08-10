@@ -1,90 +1,146 @@
-# Weekly Planner
+<h1 align="center">Weekly Planner</h1>
+<h3 align="center">Plan Your Life with Us!</h3>
 
-A weekly planner that goes beyond just scheduling stuff. It combines goal tracking, habit streaks, location awareness, travel time, screen time, step count, calendar sync and deadline warnings into one app. It then checks whether you actually did what you planned, including what you did instead if you didn't stick to it.
+A **React Native** mobile application built using **Expo (SDK 57)**. It goes beyond simple scheduling by preparing features for goal tracking, habit streaks, location awareness, travel time, calendar sync, and deadline warnings. It tracks what you planned vs. what actually happened, giving you insights into your weekly productivity.
 
-It's built for people who like to plan their week down to the hour and for people who plan well but struggle to follow through.
+Built as part of our **Software Development Practice** project.
 
-## Team
+---
 
-Built for our **Software Development Practice** project by:
+##  Team Members
 
-- Brayden
-- Ryan
-- Jason
-- Chamithu
-- Selah
+We are a group of developers collaborating on this project:
 
-## Why We're Building This
+| Name | GitHub Profile |
+| :--- | :--- |
+| **Brayden Pearce** | [braydenp114](https://github.com/braydenp114) |
+| **Selah Lee** | [Jumonialmond](https://github.com/Jumonialmond) |
+| **Ryan Mackenzie** | [ryamnack](https://github.com/ryamnack) |
+| **Jason Wapenaar** | [jasonwapenaar](https://github.com/jasonwapenaar) |
+| **Chamithu Mapalagama** | [chamithumapalagama](https://github.com/chamithumapalagama) |
 
-Most planner apps just track what you say you did and most habit trackers stop at setting a goal. We wanted something that actually closes the gap between the plan and reality. It flags when a plan isn't realistic, like not enough travel time or too much workload, checks whether it actually happened and builds habits off the same data instead of adding a separate tracker for everything.
+##  Tech Stack
 
-## Tech Stack
+This application is built with the following technologies:
 
-- **React Native** with **Expo** (SDK 54)
-- **Expo Router** for navigation
-- **Jest** and **React Native Testing Library** for testing
-- **Trello** for our scrum board
+- **Language:** ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat-square&logo=typescript&logoColor=white)
+- **Core UI:** ![React Native](https://img.shields.io/badge/React_Native-20232A?style=flat-square&logo=react&logoColor=61DAFB)
+- **Meta-Framework:** ![Expo](https://img.shields.io/badge/Expo-000020?style=flat-square&logo=expo&logoColor=white)
+- **Web Translation:** ![React Native Web](https://img.shields.io/badge/React_Native_Web-20232A?style=flat-square&logo=react&logoColor=61dafb)
+- **Routing:** ![Expo Router](https://img.shields.io/badge/Expo_Router-000020?style=flat-square&logo=expo&logoColor=white)
+- **Styling:** ![React Native StyleSheet](https://img.shields.io/badge/React_Native_StyleSheet-20232A?style=flat-square&logo=react&logoColor=61DAFB)
+- **Backend:** ![Firebase](https://img.shields.io/badge/Firebase-039BE5?style=flat-square&logo=Firebase&logoColor=FFCA28) (Planned integration)
 
-## Getting Started
+---
 
-### You'll need
+##  Project Structure
 
-- [Node.js](https://nodejs.org) (LTS version)
-- [Expo Go](https://expo.dev/go) installed on your phone if you want to test on a real device
+Here is a breakdown of the key directories in our codebase:
 
-### Setup
+```
+├── app/                  # Application screens and routing hierarchy
+│   ├── (tabs)/           # Tab-bar routes (index.tsx, explore.tsx)
+│   │   ├── _layout.tsx   # Tab routing setup & styling
+│   │   ├── explore.tsx   # Explore template screen
+│   │   └── index.tsx     # Home screen hosting the WeeklyGrid
+│   ├── _layout.tsx       # Root entry, ThemeProvider, Stack Router configuration
+│   └── modal.tsx         # Modal template screen
+├── components/           # Reusable UI components
+│   ├── ui/               # Core UI building blocks (collapsible, icon symbols)
+│   ├── WeeklyGrid.tsx    # Scrollable hourly planner grid (7:00 AM - 8:00 PM)
+│   ├── haptic-tab.tsx    # Haptic feedback button for bottom tab navigation
+│   └── themed-text.tsx   # Typography components respecting color scheme
+├── constants/            # Shared theme settings (Colors, Fonts)
+└── hooks/                # Custom React Hooks (theme selection, color schemes)
+```
 
-Clone the repo: ```bash git clone https://github.com/YOUR-USERNAME/WeeklyPlanner.git ```
+---
 
-Move into the project folder: ```bash cd WeeklyPlanner ```
+##  Getting Started
 
-Install the dependencies: ```bash npm install ```
+### Prerequisites
 
-Start the dev server: ```bash npx expo start ```
+Make sure you have the following installed:
+- [Node.js](https://nodejs.org) (LTS version recommended)
+- [Expo Go](https://expo.dev/go) app on your mobile device (iOS/Android) or an emulator configured.
 
-Scan the QR code with Expo Go, or press `w` for web, `a` for Android emulator or `i` for iOS simulator (Mac only).
+### Setup Instructions
 
-## What's In It
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/braydenp114/WeeklyPlanner.git
+   cd WeeklyPlanner
+   ```
 
-### Planning
+2. **Move into the project folder:**
+   ```bash
+   cd WeeklyPlanner
+   ```
 
-- One weekly view for study, workout, work and personal tasks
-- Checklist box you can drag tasks out of into the schedule
-- Recurring tasks that repeat daily, weekly or on specific days
-- Goals per category, with the app showing the gap between the goal and what's actually scheduled
-- Warnings when a deadline is coming up and nothing's been scheduled for it
-- Travel time checks between back-to-back location-based tasks
-- Syncs with an external calendar
-- Suggests tasks at the start of a new week based on what you've done before
+3. **Install Dependencies:**
+   ```bash
+   npm install
+   ```
 
-### Verification
+4. **Start the Development Server:**
+   ```bash
+   npx expo start
+   ```
 
-- Geofencing detects when you've arrived at a location-tagged task
-- Flip a task card after the time block to log what actually happened, whether that's done, done differently or a quick note
-- A simple checkbox is still there for tasks that don't need all that detail
-- Screen time and step count are used as extra signals, not the only source of truth
+5. **Launch the App:**
+   - Scan the QR code displayed in the terminal using the **Expo Go** app.
+   - Press `a` for the Android emulator.
+   - Press `i` for the iOS simulator (macOS only).
+   - Press `w` to run on the Web browser.
 
-### Review
+---
 
-- Weekly summary comparing planned versus actual, per category
-- How you're tracking against your original goals, not just this week's plan
-- Screen time trend shown next to completion rate so you can spot the correlation
-- Habit streaks with grace-period rules so one bad day doesn't wipe your streak
+##  Code Verification
 
-## Sprint Priorities
+We maintain code quality using static checks before committing changes.
 
-| Priority                   | What's in it                                                                                                   |
-| -------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| **Must-Have (Sprint 1)**   | Weekly planner UI, checklist drag-and-drop, recurring tasks, basic checkbox, flip-card tracking, weekly review |
-| **Should-Have (Sprint 2)** | Goal gap tracking, deadline warnings, habit streaks, geofence completion, travel time calculation              |
-| **Nice-to-Have (stretch)** | Calendar sync, screen time, step count, weather suggestions, predictive autofill                               |
+### Linting
+To check and fix linting errors, run:
+```bash
+npm run lint
+```
 
-## Working Together
+### TypeScript Validation
+To run the type-checker and verify there are no compile-time type errors, run:
+```bash
+npx tsc --noEmit
+```
 
-- Branch per feature: `git checkout -b feature/your-feature-name`
-- Open a PR before merging into `main`
-- Backlog and sprint tracking on Trello
+---
 
-## Privacy
+##  Features Roadmap
 
-Location data is sensitive, so users can turn off location sharing whenever they want. Location history only sticks around for a limited time unless they choose to keep it.
+### 1. Planning
+- [ ] Weekly grid view (hourly scheduling, Monday - Sunday, 7:00 AM - 8:00 PM)
+- [ ] Task checkbox completion
+- [ ] Recurring tasks (daily, weekly, custom days)
+- [ ] Category-specific goal tracking & gap metrics
+- [ ] Impending deadline warnings & alerts
+- [ ] Travel time calculations between location-bound tasks
+
+### 2. Verification & Analytics
+- [ ] Geofencing completion detection
+- [ ] Task logging with post-event outcome flips (completed, done differently, skipped)
+- [ ] Screen time and step count integration
+- [ ] Weekly summary reports (Planned vs. Actual comparison)
+- [ ] Streak trackers with grace-period rules
+
+---
+
+##  Privacy & Data Policy
+
+Location data is sensitive. The application will request permission only when location-aware features are activated, and users can turn off location sharing whenever they want. Location history only persists locally for a limited duration unless the user explicitly chooses to save it.
+
+---
+
+##  Contribution Workflow
+
+1. **Create a branch:** `git checkout -b feature/your-feature-name`
+2. **Develop and check quality:** Ensure `npm run lint` and `npx tsc --noEmit` run without errors.
+3. **Commit and push:** Push to your feature branch.
+4. **Open a PR:** Open a Pull Request targeting `main` on GitHub for peer review.
