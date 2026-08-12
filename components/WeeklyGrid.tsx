@@ -9,6 +9,8 @@ import {
 import { router } from 'expo-router';
 
 import { useAuth } from '@/context/AuthContext';
+import { useNav } from '@/context/NavContext';
+import { NavIcon } from '@/components/NavIcon';
 import {
   Colors,
   Fonts,
@@ -71,6 +73,7 @@ export default function WeeklyGrid() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const { user, signOutUser } = useAuth();
+  const { isDesktop, setIsMobileMenuOpen } = useNav();
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
 
   const currentDate = new Date();
@@ -100,6 +103,16 @@ export default function WeeklyGrid() {
         ]}
       >
         <View style={styles.navGroup}>
+          {!isDesktop && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setIsMobileMenuOpen(true)}
+              style={[styles.arrowButton, { backgroundColor: theme.surfaceContainer, marginRight: 8 }]}
+            >
+              <NavIcon name="hamburger" size={20} color={theme.text} />
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
             activeOpacity={0.7}
             style={[styles.arrowButton, { backgroundColor: theme.surfaceContainer }]}

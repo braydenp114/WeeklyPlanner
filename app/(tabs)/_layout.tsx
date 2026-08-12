@@ -1,59 +1,60 @@
-import { Tabs } from "expo-router";
 import React from "react";
-import { Platform } from "react-native";
+import { View, StyleSheet, useWindowDimensions } from "react-native";
+import { Slot, usePathname } from "expo-router";
 
-import { HapticTab } from "@/components/haptic-tab";
-import { IconSymbol } from "@/components/ui/icon-symbol";
-import { Colors, Fonts } from "@/constants/theme";
+import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { Sidebar } from "@/components/Sidebar";
+import { HamburgerMenu } from "@/components/HamburgerMenu";
+import { FloatingActionButton } from "@/components/FloatingActionButton";
+import { NavProvider, useNav } from "@/context/NavContext";
 
-export default function TabLayout() {
+function ResponsiveLayout() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
+  const { isMobileMenuOpen, setIsMobileMenuOpen, isDesktop } = useNav();
+  const pathname = usePathname();
+
+  // Show FAB on mobile, specifically on the root (calendar) page
+  const showFAB = !isDesktop && pathname === "/";
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: theme.tabIconSelected,
-        tabBarInactiveTintColor: theme.tabIconDefault,
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarLabelStyle: {
-          fontFamily: Fonts.mono,
-          fontSize: 11,
-          fontWeight: "500",
-        },
-        tabBarStyle: Platform.select({
-          ios: {
-            position: "absolute",
-            backgroundColor: theme.glassBackground,
-            borderTopColor: theme.glassBorder,
-          },
-          default: {
-            backgroundColor: theme.surfaceContainerLow,
-            borderTopColor: theme.outlineVariant,
-          },
-        }),
-      }}
-    >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: "Planner",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={24} name="house.fill" color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: "Explore",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={24} name="paperplane.fill" color={color} />
-          ),
-        }}
-      />
-    </Tabs>
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      {isDesktop && <Sidebar />}
+
+      <View style={styles.mainContent}>
+        <Slot />
+        {showFAB && <FloatingActionButton onPress={() => {}} />}
+      </View>
+
+      {!isDesktop && (
+        <HamburgerMenu
+          visible={isMobileMenuOpen}
+          onClose={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+    </View>
   );
 }
+
+export default function TabLayout() {
+  const { width } = useWindowDimensions();
+  const isDesktop = width >= 768; // Tablet and up
+
+  return (
+    <NavProvider isDesktop={isDesktop}>
+      <ResponsiveLayout />
+    </NavProvider>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    flexDirection: "row",
+  },
+  mainContent: {
+    flex: 1,
+    position: "relative",
+  },
+});
