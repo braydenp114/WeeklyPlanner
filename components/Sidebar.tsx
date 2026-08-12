@@ -72,6 +72,8 @@ export function Sidebar() {
           <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.textSecondary }]}>Settings</Text>
         </TouchableOpacity>
 
+
+
         <View style={[styles.divider, { backgroundColor: theme.glassBorder }]} />
 
         {/* User Profile */}
@@ -83,11 +85,24 @@ export function Sidebar() {
           </View>
           <View style={styles.profileInfo}>
             <Text style={[styles.profileName, Typography.bodySm, { color: theme.text }]} numberOfLines={1}>
-              {user?.email || 'User Name'}
+              {user?.email || 'Guest'}
             </Text>
-            <Text style={[styles.profilePlan, Typography.labelSm, { color: theme.textMuted }]}>
-              PRO PLAN
-            </Text>
+            <TouchableOpacity 
+              activeOpacity={0.7}
+              onPress={() => {
+                if (user) {
+                  import('@/config/firebase').then(({ auth }) => {
+                    auth.signOut();
+                  });
+                } else {
+                  router.push('/login');
+                }
+              }}
+            >
+              <Text style={[styles.profilePlan, Typography.labelSm, { color: theme.primaryAction }]}>
+                {user ? 'Sign Out' : 'Sign In'}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </View>

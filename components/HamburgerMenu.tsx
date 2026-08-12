@@ -111,6 +111,32 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
               <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.textSecondary }]}>Settings</Text>
             </TouchableOpacity>
 
+            {user ? (
+              <TouchableOpacity 
+                style={styles.settingsItem} 
+                activeOpacity={0.7}
+                onPress={() => {
+                  import('@/config/firebase').then(({ auth }) => {
+                    auth.signOut();
+                    onClose();
+                  });
+                }}
+              >
+                <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.primaryAction, paddingLeft: 32 }]}>Sign Out</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity 
+                style={styles.settingsItem} 
+                activeOpacity={0.7}
+                onPress={() => {
+                  onClose();
+                  router.push('/login');
+                }}
+              >
+                <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.primaryAction, paddingLeft: 32 }]}>Sign In</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={[styles.divider, { backgroundColor: theme.outlineVariant }]} />
 
             <View style={styles.profileSection}>
@@ -121,10 +147,10 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
               </View>
               <View style={styles.profileInfo}>
                 <Text style={[styles.profileName, Typography.bodySm, { color: theme.text }]} numberOfLines={1}>
-                  {user?.email || 'User Name'}
+                  {user?.email || 'Guest'}
                 </Text>
                 <Text style={[styles.profilePlan, Typography.labelSm, { color: theme.textMuted }]}>
-                  PRO PLAN
+                  {user ? 'PRO PLAN' : 'Not Signed In'}
                 </Text>
               </View>
             </View>

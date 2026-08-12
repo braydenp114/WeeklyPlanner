@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -32,10 +32,23 @@ const monthDayFormatter = new Intl.DateTimeFormat(locale, {
   month: 'short',
   day: 'numeric',
 });
+const monthYearFormatter = new Intl.DateTimeFormat(locale, {
+  month: 'long',
+  year: 'numeric',
+});
 const timeFormatter = new Intl.DateTimeFormat(locale, {
   hour: 'numeric',
   minute: '2-digit',
 });
+
+function isToday(date: Date) {
+  const today = new Date();
+  return (
+    date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
+  );
+}
 
 function getStartOfWeek(date: Date) {
   const result = new Date(date);
@@ -46,9 +59,10 @@ function getStartOfWeek(date: Date) {
   return result;
 }
 
-function getWeekDates() {
-  const today = new Date();
-  const start = getStartOfWeek(today);
+function getWeekDates(offsetWeeks = 0) {
+  const targetDate = new Date();
+  targetDate.setDate(targetDate.getDate() + offsetWeeks * 7);
+  const start = getStartOfWeek(targetDate);
 
   return Array.from({ length: 7 }, (_, index) => {
     const value = new Date(start);
@@ -60,7 +74,7 @@ function getWeekDates() {
 export type TaskItem = {
   id: string;
   title: string;
-  dayIndex: number; // 0 to 6 (Mon to Sun)
+  dayIndex: number;
   startHour: number;
   durationHours: number;
   colorHex: string;
@@ -76,8 +90,17 @@ export default function WeeklyGrid() {
   const { isDesktop, setIsMobileMenuOpen } = useNav();
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
 
-  const currentDate = new Date();
-  const weekDates = getWeekDates();
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const [weekOffset, setWeekOffset] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentDate(new Date());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
+  const weekDates = getWeekDates(weekOffset);
   const firstDay = weekDates[0];
   const lastDay = weekDates[6];
 
@@ -115,17 +138,27 @@ export default function WeeklyGrid() {
 
           <TouchableOpacity
             activeOpacity={0.7}
+            onPress={() => setWeekOffset(0)}
+            style={[styles.todayButton, { backgroundColor: theme.surfaceContainer, borderColor: theme.outlineVariant }]}
+          >
+            <Text style={[styles.todayText, { color: theme.text }]}>Today</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setWeekOffset(prev => prev - 1)}
             style={[styles.arrowButton, { backgroundColor: theme.surfaceContainer }]}
           >
             <Text style={[styles.arrowText, { color: theme.text }]}>‹</Text>
           </TouchableOpacity>
 
           <Text style={[styles.dateLabel, { color: theme.text }]}>
-            {monthDayFormatter.format(firstDay)} — {monthDayFormatter.format(lastDay)}
+            {monthYearFormatter.format(firstDay)}
           </Text>
 
           <TouchableOpacity
             activeOpacity={0.7}
+            onPress={() => setWeekOffset(prev => prev + 1)}
             style={[styles.arrowButton, { backgroundColor: theme.surfaceContainer }]}
           >
             <Text style={[styles.arrowText, { color: theme.text }]}>›</Text>
@@ -148,87 +181,9 @@ export default function WeeklyGrid() {
             </Text>
           </View>
 
-          {user ? (
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={handleSignOut}
-              style={[
-                styles.authPill,
-                {
-                  backgroundColor: theme.surfaceContainer,
-                  borderColor: theme.outlineVariant,
-                },
-              ]}
-            >
-              <Text style={[styles.userEmailText, { color: theme.text }]} numberOfLines={1}>
-                {user.email || 'User'}
-              </Text>
-              <Text style={[styles.signOutText, { color: theme.primaryAction }]}>Sign Out</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => router.push('/login')}
-              style={[
-                styles.authPill,
-                {
-                  backgroundColor: theme.primaryAction,
-                  borderColor: 'transparent',
-                },
-              ]}
-            >
-              <Text style={[styles.signOutText, { color: '#FFFFFF' }]}>Sign In</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </View>
 
-      {/* Task Card Spectrum Palette Selector Bar */}
-      <View style={styles.paletteFilterRow}>
-        <Text style={[styles.paletteLabel, { color: theme.textSecondary }]}>CARD THEMES:</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <TouchableOpacity
-            onPress={() => setSelectedTagFilter(null)}
-            style={[
-              styles.paletteChip,
-              {
-                backgroundColor:
-                  selectedTagFilter === null ? theme.primaryAction : theme.surfaceContainer,
-                borderColor: theme.outlineVariant,
-              },
-            ]}
-          >
-            <Text
-              style={[
-                styles.paletteChipText,
-                { color: selectedTagFilter === null ? '#FFFFFF' : theme.text },
-              ]}
-            >
-              All
-            </Text>
-          </TouchableOpacity>
-
-          {Object.values(TaskCardColors).map((cardColor) => {
-            const isSelected = selectedTagFilter === cardColor.bg;
-            return (
-              <TouchableOpacity
-                key={cardColor.name}
-                onPress={() => setSelectedTagFilter(isSelected ? null : cardColor.bg)}
-                style={[
-                  styles.paletteChip,
-                  {
-                    backgroundColor: cardColor.bg,
-                    borderColor: isSelected ? theme.text : 'transparent',
-                    borderWidth: isSelected ? 2 : 0,
-                  },
-                ]}
-              >
-                <Text style={styles.paletteChipTextWhite}>{cardColor.name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
 
       {/* Days Header Row */}
       <View
@@ -318,6 +273,20 @@ export default function WeeklyGrid() {
                   />
                 ))}
 
+                {/* Render Current Time Line if Today */}
+                {isToday(date) && (
+                  <View
+                    style={[
+                      styles.currentTimeLine,
+                      {
+                        top: (currentDate.getHours() + currentDate.getMinutes() / 60) * rowHeight,
+                        backgroundColor: theme.primaryAction,
+                      },
+                    ]}
+                  />
+                )}
+
+
                 {/* Render Task Cards belonging to this day */}
                 {filteredTasks
                   .filter((task) => task.dayIndex === dayIdx)
@@ -396,9 +365,23 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 20,
   },
+  todayButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: RoundedGeometry.sm,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 4,
+  },
+  todayText: {
+    fontFamily: Fonts.mono,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   dateLabel: {
     fontFamily: Fonts.headline,
-    fontSize: Typography.headlineMobile.fontSize - 6,
+    fontSize: Typography.headlineMobile.fontSize,
     fontWeight: '600',
   },
   timePill: {
@@ -504,16 +487,16 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   dayNumberBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
   dayHeaderNumber: {
     fontFamily: Fonts.headline,
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '700',
   },
   timelineScroll: {
@@ -597,5 +580,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     marginTop: 4,
+  },
+  currentTimeLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 2,
+    zIndex: 10,
   },
 });
