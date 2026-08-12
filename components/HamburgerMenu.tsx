@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, TouchableWithoutFeedback, Image } from 'react-native';
 import { usePathname, router } from 'expo-router';
 import { NavIcon, NavIconName } from './NavIcon';
 import { Colors, Typography, RoundedGeometry } from '@/constants/theme';
@@ -111,47 +111,42 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
               <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.textSecondary }]}>Settings</Text>
             </TouchableOpacity>
 
-            {user ? (
-              <TouchableOpacity 
-                style={styles.settingsItem} 
-                activeOpacity={0.7}
-                onPress={() => {
-                  import('@/config/firebase').then(({ auth }) => {
-                    auth.signOut();
-                    onClose();
-                  });
-                }}
-              >
-                <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.primaryAction, paddingLeft: 32 }]}>Sign Out</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity 
-                style={styles.settingsItem} 
-                activeOpacity={0.7}
-                onPress={() => {
-                  onClose();
-                  router.push('/login');
-                }}
-              >
-                <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.primaryAction, paddingLeft: 32 }]}>Sign In</Text>
-              </TouchableOpacity>
-            )}
+
 
             <View style={[styles.divider, { backgroundColor: theme.outlineVariant }]} />
 
             <View style={styles.profileSection}>
-              <View style={[styles.avatar, { backgroundColor: theme.primaryAction }]}>
-                <Text style={[styles.avatarText, Typography.labelMd, { color: '#FFFFFF' }]}>
-                  {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
-                </Text>
-              </View>
+              {user?.photoURL ? (
+                <Image source={{ uri: user.photoURL }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, { backgroundColor: theme.primaryAction }]}>
+                  <Text style={[styles.avatarText, Typography.labelMd, { color: '#FFFFFF' }]}>
+                    {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
+                  </Text>
+                </View>
+              )}
               <View style={styles.profileInfo}>
                 <Text style={[styles.profileName, Typography.bodySm, { color: theme.text }]} numberOfLines={1}>
                   {user?.email || 'Guest'}
                 </Text>
-                <Text style={[styles.profilePlan, Typography.labelSm, { color: theme.textMuted }]}>
-                  {user ? 'PRO PLAN' : 'Not Signed In'}
-                </Text>
+                <TouchableOpacity 
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (user) {
+                      import('@/config/firebase').then(({ auth }) => {
+                        auth.signOut();
+                        onClose();
+                      });
+                    } else {
+                      onClose();
+                      router.push('/login');
+                    }
+                  }}
+                >
+                  <Text style={[styles.profilePlan, Typography.labelSm, { color: theme.primaryAction }]}>
+                    {user ? 'Sign Out' : 'Sign In'}
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>

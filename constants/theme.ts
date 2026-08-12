@@ -145,20 +145,23 @@ export const Typography = {
   displayLg: {
     fontFamily: Fonts.headline,
     fontSize: 48,
-    fontWeight: '700' as const,
+    fontWeight: '800' as const,
     lineHeight: 56,
+    letterSpacing: -1.0,
   },
   headlineLg: {
     fontFamily: Fonts.headline,
     fontSize: 32,
-    fontWeight: '600' as const,
+    fontWeight: '800' as const,
     lineHeight: 40,
+    letterSpacing: -0.5,
   },
   headlineMobile: {
     fontFamily: Fonts.headline,
-    fontSize: 24,
-    fontWeight: '600' as const,
-    lineHeight: 32,
+    fontSize: 22,
+    fontWeight: '700' as const,
+    lineHeight: 28,
+    letterSpacing: -0.5,
   },
   bodyMd: {
     fontFamily: Fonts.body,
@@ -173,16 +176,18 @@ export const Typography = {
     lineHeight: 20,
   },
   labelMd: {
-    fontFamily: Fonts.mono,
+    fontFamily: Fonts.headline,
     fontSize: 14,
-    fontWeight: '500' as const,
+    fontWeight: '600' as const,
     lineHeight: 16,
+    letterSpacing: 0.5,
   },
   labelSm: {
-    fontFamily: Fonts.mono,
+    fontFamily: Fonts.headline,
     fontSize: 12,
-    fontWeight: '500' as const,
+    fontWeight: '600' as const,
     lineHeight: 14,
+    letterSpacing: 0.5,
   },
 };
 

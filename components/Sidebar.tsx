@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions, Image } from 'react-native';
 import { usePathname, router } from 'expo-router';
 import { NavIcon, NavIconName } from './NavIcon';
 import { Colors, Typography, RoundedGeometry } from '@/constants/theme';
@@ -78,11 +78,15 @@ export function Sidebar() {
 
         {/* User Profile */}
         <View style={styles.profileSection}>
-          <View style={[styles.avatar, { backgroundColor: theme.primaryAction }]}>
-            <Text style={[styles.avatarText, Typography.labelMd, { color: '#FFFFFF' }]}>
-              {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
-            </Text>
-          </View>
+          {user?.photoURL ? (
+            <Image source={{ uri: user.photoURL }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, { backgroundColor: theme.primaryAction }]}>
+              <Text style={[styles.avatarText, Typography.labelMd, { color: '#FFFFFF' }]}>
+                {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
+              </Text>
+            </View>
+          )}
           <View style={styles.profileInfo}>
             <Text style={[styles.profileName, Typography.bodySm, { color: theme.text }]} numberOfLines={1}>
               {user?.email || 'Guest'}

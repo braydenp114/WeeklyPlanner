@@ -482,21 +482,21 @@ const styles = StyleSheet.create({
   },
   dayHeaderName: {
     fontFamily: Fonts.mono,
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
   dayNumberBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
   dayHeaderNumber: {
     fontFamily: Fonts.headline,
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
   },
   timelineScroll: {
