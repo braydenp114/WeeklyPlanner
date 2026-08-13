@@ -1,5 +1,5 @@
 import React from 'react';
-import { TouchableOpacity, StyleSheet, Platform, View } from 'react-native';
+import { TouchableOpacity, StyleSheet, Platform, View, ViewStyle } from 'react-native';
 import { NavIcon } from './NavIcon';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
         position: 'fixed',
       },
     }),
-  },
+  } as ViewStyle,
   fab: {
     width: 56,
     height: 56,
