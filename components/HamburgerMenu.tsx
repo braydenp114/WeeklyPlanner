@@ -5,6 +5,7 @@ import { NavIcon, NavIconName } from './NavIcon';
 import { Colors, Typography, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
+import { useMemo } from 'react';
 
 const NAV_ITEMS = [
   { name: 'Weekly Grid', icon: 'gridview', route: '/' },
@@ -23,7 +24,7 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
   const pathname = usePathname();
   const { user } = useAuth();
 
-  const slideAnim = useRef(new Animated.Value(-300)).current;
+  const slideAnim = useMemo(() => new Animated.Value(-300), []);
 
   useEffect(() => {
     if (visible) {
