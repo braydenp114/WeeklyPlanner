@@ -116,7 +116,7 @@ npx tsc --noEmit
 ##  Features Roadmap
 
 ### 1. Planning
-- [ ] Weekly grid view (hourly scheduling, Monday - Sunday, 7:00 AM - 8:00 PM)
+- [x] Weekly grid view
 - [ ] Task checkbox completion
 - [ ] Recurring tasks (daily, weekly, custom days)
 - [ ] Category-specific goal tracking & gap metrics
