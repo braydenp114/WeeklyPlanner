@@ -130,7 +130,7 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
                 <Text style={[styles.profileName, Typography.bodySm, { color: theme.text }]} numberOfLines={1}>
                   {user?.email || 'Guest'}
                 </Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={() => {
                     if (user) {

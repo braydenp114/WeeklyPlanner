@@ -48,3 +48,5 @@ app-example
 CLAUDE.md
 
 .vscode/
+
+google-services.json

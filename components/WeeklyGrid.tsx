@@ -22,7 +22,6 @@ import {
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
-const rowHeight = 52;
 
 const locale = Intl.DateTimeFormat().resolvedOptions().locale;
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
@@ -83,6 +82,10 @@ export type TaskItem = {
 
 const initialSampleTasks: TaskItem[] = [];
 
+/**
+ * The main grid component displaying a weekly view of tasks.
+ * It features a scrollable hourly timeline and date headers.
+ */
 export default function WeeklyGrid() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
@@ -94,7 +97,12 @@ export default function WeeklyGrid() {
 
   const [weekOffset, setWeekOffset] = useState(0);
 
+  const [gridHeight, setGridHeight] = useState(0);
+
+  const rowHeight = gridHeight > 0 ? gridHeight / 24 : 52;
+
   useEffect(() => {
+    // Update the current time every minute to keep the "current time" line accurate
     const timer = setInterval(() => {
       setCurrentDate(new Date());
     }, 60000);
@@ -164,26 +172,7 @@ export default function WeeklyGrid() {
             <Text style={[styles.arrowText, { color: theme.text }]}>›</Text>
           </TouchableOpacity>
         </View>
-
-        <View style={styles.rightHeaderGroup}>
-          <View
-            style={[
-              styles.timePill,
-              {
-                backgroundColor: theme.surfaceContainerHigh,
-                borderColor: theme.outlineVariant,
-              },
-            ]}
-          >
-            <View style={[styles.liveDot, { backgroundColor: theme.primaryAction }]} />
-            <Text style={[styles.timePillText, { color: theme.text }]}>
-              {timeFormatter.format(currentDate)} • {timeZone}
-            </Text>
-          </View>
-
-        </View>
       </View>
-
 
       {/* Days Header Row */}
       <View
@@ -234,10 +223,9 @@ export default function WeeklyGrid() {
       </View>
 
       {/* Scrollable Hourly Timeline */}
-      <ScrollView
+      <View
         style={[styles.timelineScroll, { backgroundColor: theme.background }]}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.timelineContent}
+        onLayout={(e) => setGridHeight(e.nativeEvent.layout.height)}
       >
         <View style={styles.gridBody}>
           {/* Time Labels Column */}
@@ -250,12 +238,21 @@ export default function WeeklyGrid() {
               },
             ]}
           >
+            {/* Empty spacer blocks to maintain column height */}
             {hours.map((hour) => (
-              <View key={hour} style={styles.timeSlot}>
-                <Text style={[styles.timeLabelText, { color: theme.textMuted }]}>
-                  {String(hour).padStart(2, '0')}:00
-                </Text>
-              </View>
+              <View key={hour} style={[styles.timeSlot, { height: rowHeight }]} />
+            ))}
+            {/* Time labels positioned on the grid lines (skip midnight) */}
+            {hours.filter((h) => h > 0).map((hour) => (
+              <Text
+                key={`label-${hour}`}
+                style={[
+                  styles.timeLabelText,
+                  { color: theme.textMuted, top: hour * rowHeight - 7 },
+                ]}
+              >
+                {String(hour).padStart(2, '0')}:00
+              </Text>
             ))}
           </View>
 
@@ -269,7 +266,7 @@ export default function WeeklyGrid() {
                 {hours.map((hour) => (
                   <View
                     key={`${date.toISOString()}-${hour}`}
-                    style={[styles.hourCell, { borderColor: theme.outlineVariant }]}
+                    style={[styles.hourCell, { borderColor: theme.outlineVariant, height: rowHeight }]}
                   />
                 ))}
 
@@ -325,10 +322,14 @@ export default function WeeklyGrid() {
             ))}
           </View>
         </View>
-      </ScrollView>
+      </View>
     </View>
   );
 }
+
+/**
+ * Styles for the WeeklyGrid component.
+ */
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -482,13 +483,13 @@ const styles = StyleSheet.create({
   },
   dayHeaderName: {
     fontFamily: Fonts.mono,
-    fontSize: 12,
+    fontSize: 15,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
   dayNumberBadge: {
-    width: 32,
-    height: 32,
+    width: 45,
+    height: 45,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -496,7 +497,7 @@ const styles = StyleSheet.create({
   },
   dayHeaderNumber: {
     fontFamily: Fonts.headline,
-    fontSize: 22,
+    fontSize: 30,
     fontWeight: '700',
   },
   timelineScroll: {
@@ -508,18 +509,19 @@ const styles = StyleSheet.create({
   },
   gridBody: {
     flexDirection: 'row',
-    minHeight: 24 * rowHeight,
+    flex: 1,
   },
   timeColumn: {
     width: 54,
     borderRightWidth: 1,
+    position: 'relative',
   },
   timeSlot: {
-    height: rowHeight,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   timeLabelText: {
+    position: 'absolute',
+    width: '100%',
+    textAlign: 'center',
     fontFamily: Fonts.mono,
     fontSize: Typography.labelSm.fontSize,
   },
@@ -534,7 +536,6 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   hourCell: {
-    height: rowHeight,
     borderBottomWidth: 1,
   },
   taskCard: {
