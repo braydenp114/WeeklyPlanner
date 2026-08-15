@@ -43,10 +43,12 @@ app-example
 /ios
 /android
 
+# Firebase / Google Services generated files
+google-services.json
+android/app/google-services.json
+
 # Claude
 .claude/
 CLAUDE.md
 
 .vscode/
-
-google-services.json
