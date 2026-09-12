@@ -79,6 +79,7 @@ export type TaskItem = {
   durationHours: number;
   colorHex: string;
   tag: string;
+  reminderMinutesBefore?: number | null;
 };
 
 const initialSampleTasks: TaskItem[] = [];
