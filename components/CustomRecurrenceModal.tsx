@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Modal,
   View,
@@ -9,6 +9,7 @@ import {
   TextInput,
   Platform,
   KeyboardAvoidingView,
+  useWindowDimensions,
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Timestamp } from 'firebase/firestore';
@@ -16,6 +17,7 @@ import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { CustomRecurrenceRule } from '@/services/tasksService';
 import { CalendarPicker } from './ui/CalendarPicker';
+import { AnchorRect } from './ui/TimeDropdown';
 
 interface CustomRecurrenceModalProps {
   visible: boolean;
@@ -40,6 +42,7 @@ const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']; // 0-6 index, matching JS 
 export function CustomRecurrenceModal({ visible, onClose, startDate, onSave, initialRule }: CustomRecurrenceModalProps) {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const [interval, setIntervalVal] = useState('1');
   const [unit, setUnit] = useState<'day' | 'week' | 'month' | 'year'>('week');
@@ -49,6 +52,9 @@ export function CustomRecurrenceModal({ visible, onClose, startDate, onSave, ini
   const [endOccurrences, setEndOccurrences] = useState('13');
 
   const [isUnitDropdownOpen, setIsUnitDropdownOpen] = useState(false);
+  const [unitAnchor, setUnitAnchor] = useState<AnchorRect | null>(null);
+  const unitBtnRef = useRef<View>(null);
+
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   useEffect(() => {
@@ -134,29 +140,24 @@ export function CustomRecurrenceModal({ visible, onClose, startDate, onSave, ini
                 />
                 <View style={{ position: 'relative', zIndex: 100 }}>
                   <TouchableOpacity
+                    ref={unitBtnRef}
                     style={[styles.dropdownBtn, { backgroundColor: theme.surfaceContainer, borderColor: theme.outlineVariant }]}
-                    onPress={() => setIsUnitDropdownOpen(!isUnitDropdownOpen)}
+                    onPress={() => {
+                      if (isUnitDropdownOpen) {
+                        setIsUnitDropdownOpen(false);
+                      } else {
+                        unitBtnRef.current?.measure((x, y, w, h, pageX, pageY) => {
+                          setUnitAnchor({ x: pageX, y: pageY, width: w, height: h });
+                          setIsUnitDropdownOpen(true);
+                        });
+                      }
+                    }}
                   >
                     <Text style={[styles.dropdownLabel, { color: theme.text }]}>
                       {parseInt(interval, 10) > 1 ? unit + 's' : unit}
                     </Text>
                     <MaterialIcons name="arrow-drop-down" size={18} color={theme.onSurfaceVariant} />
                   </TouchableOpacity>
-                  {isUnitDropdownOpen && (
-                    <View style={[styles.dropdownMenu, { backgroundColor: theme.surfaceContainerHighest, borderColor: theme.outlineVariant }]}>
-                      {UNITS.map((u) => (
-                        <TouchableOpacity
-                          key={u.value}
-                          style={styles.dropdownItem}
-                          onPress={() => { setUnit(u.value as any); setIsUnitDropdownOpen(false); }}
-                        >
-                          <Text style={[styles.dropdownItemText, { color: theme.text }]}>
-                            {parseInt(interval, 10) > 1 ? u.label + 's' : u.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
                 </View>
               </View>
             </View>
@@ -247,6 +248,46 @@ export function CustomRecurrenceModal({ visible, onClose, startDate, onSave, ini
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Unit Dropdown Popover */}
+      {isUnitDropdownOpen && unitAnchor && (
+        <View style={[StyleSheet.absoluteFill, { elevation: 10, zIndex: 1000 }]}>
+          <TouchableWithoutFeedback onPress={() => setIsUnitDropdownOpen(false)}>
+            <View style={StyleSheet.absoluteFill} />
+          </TouchableWithoutFeedback>
+          <View
+            style={[
+              styles.dropdownMenu,
+              {
+                position: 'absolute',
+                top: (windowHeight - (unitAnchor.y + unitAnchor.height) >= 160 || windowHeight - (unitAnchor.y + unitAnchor.height) >= unitAnchor.y)
+                  ? unitAnchor.y + unitAnchor.height + 4
+                  : Math.max(8, unitAnchor.y - 160 - 4),
+                left: unitAnchor.x + 100 > windowWidth - 12
+                  ? Math.max(12, windowWidth - 100 - 12)
+                  : unitAnchor.x,
+                width: 100, // Match original button width
+                backgroundColor: theme.surfaceContainerHighest,
+                borderColor: theme.outlineVariant,
+                right: undefined, // Override stylesheet 'right: 0'
+                marginTop: 0, // Override stylesheet 'marginTop: 4'
+              },
+            ]}
+          >
+            {UNITS.map((u) => (
+              <TouchableOpacity
+                key={u.value}
+                style={styles.dropdownItem}
+                onPress={() => { setUnit(u.value as any); setIsUnitDropdownOpen(false); }}
+              >
+                <Text style={[styles.dropdownItemText, { color: theme.text }]}>
+                  {parseInt(interval, 10) > 1 ? u.label + 's' : u.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
 
       {/* Reused Calendar Picker for "On Date" */}
       <CalendarPicker

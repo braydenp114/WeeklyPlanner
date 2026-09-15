@@ -35,6 +35,12 @@ export function expandTaskOccurrences(
   const taskId = task.id || '';
   const taskStart = task.startDate.toDate();
   const taskEnd = task.endDate.toDate();
+
+  // Extract original time components to preserve them across occurrences
+  const startHours = taskStart.getHours();
+  const startMinutes = taskStart.getMinutes();
+  const startSeconds = taskStart.getSeconds();
+
   const durationMs = taskEnd.getTime() - taskStart.getTime();
 
   // Helper to create an ExpandedTask for a given occurrence start date
@@ -80,6 +86,9 @@ export function expandTaskOccurrences(
 
     // Check endOccurrences limit (counts each emitted day individually)
     if (maxOccurrences !== undefined && totalEmitted >= maxOccurrences) break;
+
+    // PRESERVE ORIGINAL TIME: generators or DST shifts might have altered it
+    occDate.setHours(startHours, startMinutes, startSeconds, 0);
 
     // Skip occurrences that end before the visible range starts
     const occEnd = new Date(occDate.getTime() + durationMs);
