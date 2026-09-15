@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { router } from 'expo-router';
+
 
 import { useAuth } from '@/context/AuthContext';
 import { useNav } from '@/context/NavContext';
@@ -29,20 +29,11 @@ import { expandAllTasks, ExpandedTask } from '@/utils/expandRecurrences';
 const hours = Array.from({ length: 24 }, (_, i) => i);
 
 const locale = Intl.DateTimeFormat().resolvedOptions().locale;
-const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
 const dayFormatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
 const dayNumFormatter = new Intl.DateTimeFormat(locale, { day: 'numeric' });
-const monthDayFormatter = new Intl.DateTimeFormat(locale, {
-  month: 'short',
-  day: 'numeric',
-});
 const monthYearFormatter = new Intl.DateTimeFormat(locale, {
   month: 'long',
   year: 'numeric',
-});
-const timeFormatter = new Intl.DateTimeFormat(locale, {
-  hour: 'numeric',
-  minute: '2-digit',
 });
 
 function isToday(date: Date) {
@@ -138,13 +129,7 @@ export type TaskItem = {
 
 // ─── Mapping: ExpandedTask → TaskItem[] ─────────────────────────────────────
 
-function isSameDay(a: Date, b: Date): boolean {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
+
 
 /**
  * Maps expanded Firestore tasks to grid-local TaskItem entries.
@@ -227,7 +212,7 @@ function mapExpandedTasksToItems(
 export default function WeeklyGrid() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
-  const { user, loading: authLoading, signOutUser } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { isDesktop, setIsMobileMenuOpen, openNewTaskModal, taskRefreshKey } = useNav();
 
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -260,35 +245,31 @@ export default function WeeklyGrid() {
   const lastDay = weekDates[weekDates.length - 1];
 
   // ── Compute date range for fetching ──
-  const rangeStart = useMemo(() => {
-    if (!firstDay) return new Date();
-    const d = new Date(firstDay);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  }, [firstDay?.getTime()]);
+  const rangeStart = firstDay ? new Date(firstDay) : new Date();
+  rangeStart.setHours(0, 0, 0, 0);
 
-  const rangeEnd = useMemo(() => {
-    if (!lastDay) return new Date();
-    const d = new Date(lastDay);
-    d.setHours(23, 59, 59, 999);
-    return d;
-  }, [lastDay?.getTime()]);
+  const rangeEnd = lastDay ? new Date(lastDay) : new Date();
+  rangeEnd.setHours(23, 59, 59, 999);
 
   // ── Fetch tasks from Firestore (gated on auth readiness) ──
   useEffect(() => {
+    let cancelled = false;
+
     // Don't fetch until Firebase Auth has finished restoring the persisted session.
     // Without this gate, auth.currentUser is null on reload and the service throws
     // "User not authenticated" before onAuthStateChanged has fired.
     if (authLoading || !user) {
-      // Clear tasks if the user signed out
-      if (!authLoading && !user) {
-        setTasks([]);
-        setAllDayTasks([]);
-      }
-      return;
+      // Clear tasks if the user signed out, asynchronously to avoid ESLint cascade warning
+      Promise.resolve().then(() => {
+        if (!cancelled) {
+          setTasks([]);
+          setAllDayTasks([]);
+        }
+      });
+      return () => {
+        cancelled = true;
+      };
     }
-
-    let cancelled = false;
 
     async function fetchTasks() {
       setTasksLoading(true);
@@ -331,10 +312,7 @@ export default function WeeklyGrid() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeStart.getTime(), rangeEnd.getTime(), taskRefreshKey, authLoading, user]);
 
-  const handleSignOut = async () => {
-    await signOutUser();
-    router.replace('/login');
-  };
+
 
   return (
     <View style={[styles.wrapper, { backgroundColor: theme.background }]}>

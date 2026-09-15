@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
-import { Colors, Fonts, RoundedGeometry, Typography } from '@/constants/theme';
+import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TaskItem } from '@/components/WeeklyGrid';
 
@@ -14,10 +14,6 @@ interface MonthlyGridViewProps {
 const locale = Intl.DateTimeFormat().resolvedOptions().locale;
 const dayFormatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
 const dayNumFormatter = new Intl.DateTimeFormat(locale, { day: 'numeric' });
-const timeFormatter = new Intl.DateTimeFormat(locale, {
-  hour: 'numeric',
-  minute: '2-digit',
-});
 
 // A helper to determine if a date is in the same month as the primary month we're viewing
 function isSameMonth(date1: Date, date2: Date) {
