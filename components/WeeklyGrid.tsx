@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -22,6 +23,8 @@ import {
 } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MonthlyGridView from './MonthlyGridView';
+import { getTasksForRange, getRecurringTasks, Task } from '@/services/tasksService';
+import { expandAllTasks, ExpandedTask } from '@/utils/expandRecurrences';
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
 
@@ -113,6 +116,8 @@ function getGridDates(viewMode: ViewMode, offset: number) {
   return [];
 }
 
+// ─── TaskItem: grid-local rendering format ──────────────────────────────────
+
 export type TaskItem = {
   id: string;
   title: string;
@@ -121,9 +126,99 @@ export type TaskItem = {
   durationHours: number;
   colorHex: string;
   tag: string;
+  /** The actual calendar date this occurrence falls on, for month view matching. */
+  actualDate: Date;
+  /** The original Firestore document ID, for edit/delete operations. */
+  originalTaskId: string;
+  /** Whether this is a generated recurrence instance. */
+  isRecurrenceInstance: boolean;
+  /** Whether this is an all-day event. */
+  isAllDay: boolean;
 };
 
-const initialSampleTasks: TaskItem[] = [];
+// ─── Mapping: ExpandedTask → TaskItem[] ─────────────────────────────────────
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * Maps expanded Firestore tasks to grid-local TaskItem entries.
+ * Each expanded task may span multiple days; one TaskItem is created per visible day it overlaps.
+ */
+function mapExpandedTasksToItems(
+  expandedTasks: ExpandedTask[],
+  gridDates: Date[]
+): TaskItem[] {
+  const items: TaskItem[] = [];
+
+  for (const task of expandedTasks) {
+    const taskStart = task.startDate.toDate();
+    const taskEnd = task.endDate.toDate();
+    const tag = task.title.split(/\s+/)[0] || '';
+
+    for (let dayIdx = 0; dayIdx < gridDates.length; dayIdx++) {
+      const gridDate = gridDates[dayIdx];
+      const dayStart = new Date(gridDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(gridDate);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      // Check if the task overlaps this day
+      if (taskEnd < dayStart || taskStart > dayEnd) continue;
+
+      if (task.allDay) {
+        items.push({
+          id: `${task.occurrenceId}-day${dayIdx}`,
+          title: task.title,
+          dayIndex: dayIdx,
+          startHour: 0,
+          durationHours: 24,
+          colorHex: task.colorHex,
+          tag,
+          actualDate: gridDate,
+          originalTaskId: task.originalTaskId,
+          isRecurrenceInstance: task.isRecurrenceInstance,
+          isAllDay: true,
+        });
+        continue;
+      }
+
+      // Compute start hour on this day (clamped to 0 if task started before this day)
+      const effectiveStart = taskStart < dayStart ? dayStart : taskStart;
+      const startHour =
+        effectiveStart.getHours() + effectiveStart.getMinutes() / 60;
+
+      // Compute end on this day (clamped to 24 if task extends past midnight)
+      const effectiveEnd = taskEnd > dayEnd ? dayEnd : taskEnd;
+      const endHour =
+        effectiveEnd.getHours() + effectiveEnd.getMinutes() / 60;
+
+      // Duration in hours on this specific day
+      const durationHours = Math.max(endHour - startHour, 0.25); // min 15min visual height
+
+      items.push({
+        id: `${task.occurrenceId}-day${dayIdx}`,
+        title: task.title,
+        dayIndex: dayIdx,
+        startHour,
+        durationHours,
+        colorHex: task.colorHex,
+        tag,
+        actualDate: gridDate,
+        originalTaskId: task.originalTaskId,
+        isRecurrenceInstance: task.isRecurrenceInstance,
+        isAllDay: false,
+      });
+    }
+  }
+
+  return items;
+}
 
 /**
  * The main grid component displaying a weekly view of tasks.
@@ -133,8 +228,7 @@ export default function WeeklyGrid() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const { user, signOutUser } = useAuth();
-  const { isDesktop, setIsMobileMenuOpen, openNewTaskModal } = useNav();
-  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
+  const { isDesktop, setIsMobileMenuOpen, openNewTaskModal, taskRefreshKey } = useNav();
 
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -144,6 +238,12 @@ export default function WeeklyGrid() {
 
   const [gridHeight, setGridHeight] = useState(0);
 
+  // ── Firestore task data ──
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [allDayTasks, setAllDayTasks] = useState<TaskItem[]>([]);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [tasksError, setTasksError] = useState<string | null>(null);
+
   useEffect(() => {
     // Update the current time every minute to keep the "current time" line accurate
     const timer = setInterval(() => {
@@ -151,6 +251,7 @@ export default function WeeklyGrid() {
     }, 60000);
     return () => clearInterval(timer);
   }, []);
+
   const weekDates = getGridDates(viewMode, dateOffset);
   const MIN_ROW_HEIGHT = 50;
   const MIN_DAY_COLUMN_WIDTH = 100;
@@ -158,9 +259,65 @@ export default function WeeklyGrid() {
   const firstDay = weekDates[0];
   const lastDay = weekDates[weekDates.length - 1];
 
-  const filteredTasks = selectedTagFilter
-    ? initialSampleTasks.filter((t) => t.colorHex === selectedTagFilter)
-    : initialSampleTasks;
+  // ── Compute date range for fetching ──
+  const rangeStart = useMemo(() => {
+    if (!firstDay) return new Date();
+    const d = new Date(firstDay);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, [firstDay?.getTime()]);
+
+  const rangeEnd = useMemo(() => {
+    if (!lastDay) return new Date();
+    const d = new Date(lastDay);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  }, [lastDay?.getTime()]);
+
+  // ── Fetch tasks from Firestore ──
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchTasks() {
+      setTasksLoading(true);
+      setTasksError(null);
+
+      try {
+        // Fetch both: tasks in range + recurring tasks that may recur into range
+        const [rangeTasks, recurringTasks] = await Promise.all([
+          getTasksForRange(rangeStart, rangeEnd),
+          getRecurringTasks(rangeStart, rangeEnd),
+        ]);
+
+        if (cancelled) return;
+
+        // Merge and deduplicate, then expand recurrences
+        const allRawTasks: Task[] = [...rangeTasks, ...recurringTasks];
+        const expanded = expandAllTasks(allRawTasks, rangeStart, rangeEnd);
+
+        // Map to grid-local TaskItem format
+        const items = mapExpandedTasksToItems(expanded, weekDates);
+
+        // Separate all-day and timed tasks
+        setAllDayTasks(items.filter((t) => t.isAllDay));
+        setTasks(items.filter((t) => !t.isAllDay));
+      } catch (err: any) {
+        if (cancelled) return;
+        setTasksError(err.message || 'Failed to load tasks');
+      } finally {
+        if (!cancelled) {
+          setTasksLoading(false);
+        }
+      }
+    }
+
+    fetchTasks();
+
+    return () => {
+      cancelled = true;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeStart.getTime(), rangeEnd.getTime(), taskRefreshKey]);
 
   const handleSignOut = async () => {
     await signOutUser();
@@ -256,11 +413,22 @@ export default function WeeklyGrid() {
         </View>
       </View>
 
+      {/* Error Banner */}
+      {tasksError && (
+        <View style={[styles.errorBanner, { backgroundColor: theme.error + '22', borderColor: theme.error }]}>
+          <MaterialIcons name="error-outline" size={16} color={theme.error} />
+          <Text style={[styles.errorText, { color: theme.error }]}>{tasksError}</Text>
+          <TouchableOpacity onPress={() => setTasksError(null)}>
+            <MaterialIcons name="close" size={16} color={theme.error} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {viewMode === 'Month' ? (
         <MonthlyGridView 
           dates={weekDates} 
           currentDate={currentDate} 
-          tasks={filteredTasks} 
+          tasks={[...tasks, ...allDayTasks]} 
           onDayClick={(date) => {
             const today = new Date();
             today.setHours(0,0,0,0);
@@ -338,6 +506,40 @@ export default function WeeklyGrid() {
               </View>
             </View>
 
+            {/* All-Day Tasks Banner */}
+            {allDayTasks.length > 0 && (
+              <View style={[styles.allDayRow, { borderColor: theme.outlineVariant }]}>
+                <View style={[styles.allDayLabel, { borderColor: theme.outlineVariant }]}>
+                  <Text style={[styles.allDayLabelText, { color: theme.textMuted }]}>ALL DAY</Text>
+                </View>
+                <View style={styles.allDayColumns}>
+                  {weekDates.map((date, dayIdx) => {
+                    const dayAllDayTasks = allDayTasks.filter((t) => t.dayIndex === dayIdx);
+                    return (
+                      <View
+                        key={`allday-${date.toISOString()}`}
+                        style={[styles.allDayColumn, { borderColor: theme.outlineVariant }]}
+                      >
+                        {dayAllDayTasks.map((task) => (
+                          <View
+                            key={task.id}
+                            style={[
+                              styles.allDayChip,
+                              { backgroundColor: task.colorHex },
+                            ]}
+                          >
+                            <Text style={styles.allDayChipText} numberOfLines={1}>
+                              {task.title}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
             {/* Grid body */}
             <View style={styles.gridBody}>
               {/* Time Labels Column */}
@@ -398,7 +600,7 @@ export default function WeeklyGrid() {
                     )}
 
                     {/* Render Task Cards belonging to this day */}
-                    {filteredTasks
+                    {tasks
                       .filter((task) => task.dayIndex === dayIdx)
                       .map((task) => {
                         const topOffset = task.startHour * rowHeight;
@@ -421,19 +623,43 @@ export default function WeeklyGrid() {
                             <View style={styles.taskCardHeader}>
                               <Text style={styles.taskTagText}>{task.tag}</Text>
                               <Text style={styles.taskTimeText}>
-                                {String(task.startHour).padStart(2, '0')}:00
+                                {String(Math.floor(task.startHour)).padStart(2, '0')}:
+                                {String(Math.round((task.startHour % 1) * 60)).padStart(2, '0')}
                               </Text>
                             </View>
 
                             <Text style={styles.taskTitleText} numberOfLines={2}>
                               {task.title}
                             </Text>
+
+                            {task.isRecurrenceInstance && (
+                              <View style={styles.recurrenceBadge}>
+                                <MaterialIcons name="repeat" size={10} color="rgba(255,255,255,0.8)" />
+                              </View>
+                            )}
                           </TouchableOpacity>
                         );
                       })}
                   </View>
                 ))}
               </View>
+
+              {/* Loading Overlay (stale-while-revalidate: doesn't blank existing tasks) */}
+              {tasksLoading && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator size="small" color={theme.primaryAction} />
+                </View>
+              )}
+
+              {/* Empty State */}
+              {!tasksLoading && tasks.length === 0 && allDayTasks.length === 0 && !tasksError && (
+                <View style={styles.emptyState}>
+                  <MaterialIcons name="event-busy" size={32} color={theme.textMuted} />
+                  <Text style={[styles.emptyStateText, { color: theme.textMuted }]}>
+                    No events
+                  </Text>
+                </View>
+              )}
             </View>
           </ScrollView>
         </View>
@@ -544,38 +770,6 @@ const styles = StyleSheet.create({
     fontSize: Typography.labelSm.fontSize,
     fontWeight: '600',
   },
-  paletteFilterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-  paletteLabel: {
-    fontFamily: Fonts.mono,
-    fontSize: Typography.labelSm.fontSize,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  paletteChip: {
-    borderRadius: RoundedGeometry.default, // 8px base radius
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginRight: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paletteChipText: {
-    fontFamily: Fonts.mono,
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  paletteChipTextWhite: {
-    fontFamily: Fonts.mono,
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
   headerRowContainer: {
     flexDirection: 'row',
     borderWidth: 1,
@@ -631,6 +825,7 @@ const styles = StyleSheet.create({
   gridBody: {
     flexDirection: 'row',
     flex: 1,
+    position: 'relative',
   },
   timeColumn: {
     width: 54,
@@ -749,6 +944,95 @@ const styles = StyleSheet.create({
   dropdownMenuItemText: {
     fontFamily: Fonts.mono,
     fontSize: Typography.labelSm.fontSize,
+    fontWeight: '500',
+  },
+  // ── All-Day Banner ──
+  allDayRow: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderRadius: 0,
+    minHeight: 32,
+  },
+  allDayLabel: {
+    width: 54,
+    borderRightWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  allDayLabelText: {
+    fontFamily: Fonts.mono,
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  allDayColumns: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  allDayColumn: {
+    flex: 1,
+    minWidth: 100,
+    borderRightWidth: 1,
+    padding: 2,
+    gap: 2,
+  },
+  allDayChip: {
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  allDayChipText: {
+    fontFamily: Fonts.mono,
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  // ── Recurrence Badge ──
+  recurrenceBadge: {
+    position: 'absolute',
+    bottom: 3,
+    right: 3,
+    opacity: 0.7,
+  },
+  // ── Error Banner ──
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: RoundedGeometry.sm,
+    borderWidth: 1,
+    marginBottom: 8,
+  },
+  errorText: {
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    flex: 1,
+  },
+  // ── Loading Overlay ──
+  loadingOverlay: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 20,
+  },
+  // ── Empty State ──
+  emptyState: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyStateText: {
+    fontFamily: Fonts.body,
+    fontSize: 14,
     fontWeight: '500',
   },
 });

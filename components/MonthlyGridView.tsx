@@ -24,12 +24,31 @@ function isSameMonth(date1: Date, date2: Date) {
   return date1.getMonth() === date2.getMonth() && date1.getFullYear() === date2.getFullYear();
 }
 
+function isSameDay(date1: Date, date2: Date) {
+  return (
+    date1.getFullYear() === date2.getFullYear() &&
+    date1.getMonth() === date2.getMonth() &&
+    date1.getDate() === date2.getDate()
+  );
+}
+
 function isToday(date: Date, currentDate: Date) {
   return (
     date.getDate() === currentDate.getDate() &&
     date.getMonth() === currentDate.getMonth() &&
     date.getFullYear() === currentDate.getFullYear()
   );
+}
+
+/**
+ * Formats a fractional startHour into a human-readable time string (e.g. "9:30a").
+ */
+function formatHourLabel(startHour: number): string {
+  const h = Math.floor(startHour);
+  const m = Math.round((startHour % 1) * 60);
+  const period = h >= 12 ? 'p' : 'a';
+  const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return m > 0 ? `${displayH}:${String(m).padStart(2, '0')}${period}` : `${displayH}${period}`;
 }
 
 export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick }: MonthlyGridViewProps) {
@@ -50,14 +69,15 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick 
   // Get headers from the first week
   const headers = weeks[0].map((date) => dayFormatter.format(date).toUpperCase());
 
-  // Function to filter and sort tasks for a specific date
+  // Function to filter and sort tasks for a specific date using actual calendar date matching
   const getTasksForDate = (date: Date) => {
-    const dayOfWeek = date.getDay(); 
-    const mappedDayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Assuming Monday is 0
-    
-    const dayTasks = tasks.filter(t => t.dayIndex === mappedDayIndex);
-    // Sort by startHour
-    return dayTasks.sort((a, b) => a.startHour - b.startHour);
+    const dayTasks = tasks.filter(t => isSameDay(t.actualDate, date));
+    // Sort: all-day tasks first, then by startHour
+    return dayTasks.sort((a, b) => {
+      if (a.isAllDay && !b.isAllDay) return -1;
+      if (!a.isAllDay && b.isAllDay) return 1;
+      return a.startHour - b.startHour;
+    });
   };
 
   return (
@@ -84,6 +104,7 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick 
                 // Cap visible events
                 const MAX_VISIBLE_EVENTS = 4;
                 const visibleTasks = dayTasks.slice(0, MAX_VISIBLE_EVENTS);
+                const overflowCount = dayTasks.length - MAX_VISIBLE_EVENTS;
 
                 return (
                   <TouchableOpacity
@@ -119,14 +140,27 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick 
                       {visibleTasks.map(task => (
                         <View key={task.id} style={styles.eventRow}>
                           <View style={[styles.eventDot, { backgroundColor: task.colorHex }]} />
-                          <Text style={[styles.eventTime, { color: isCurrentMonth ? theme.textMuted : 'rgba(118,117,134,0.5)' }]} numberOfLines={1}>
-                            {task.startHour}a
-                          </Text>
-                          <Text style={[styles.eventTitle, { color: isCurrentMonth ? theme.text : theme.textMuted }]} numberOfLines={1}>
-                            {task.title}
-                          </Text>
+                          {task.isAllDay ? (
+                            <Text style={[styles.eventTitle, { color: isCurrentMonth ? theme.text : theme.textMuted }]} numberOfLines={1}>
+                              {task.title}
+                            </Text>
+                          ) : (
+                            <>
+                              <Text style={[styles.eventTime, { color: isCurrentMonth ? theme.textMuted : 'rgba(118,117,134,0.5)' }]} numberOfLines={1}>
+                                {formatHourLabel(task.startHour)}
+                              </Text>
+                              <Text style={[styles.eventTitle, { color: isCurrentMonth ? theme.text : theme.textMuted }]} numberOfLines={1}>
+                                {task.title}
+                              </Text>
+                            </>
+                          )}
                         </View>
                       ))}
+                      {overflowCount > 0 && (
+                        <Text style={[styles.overflowText, { color: theme.textMuted }]}>
+                          +{overflowCount} more
+                        </Text>
+                      )}
                     </View>
                   </TouchableOpacity>
                 );
@@ -217,11 +251,17 @@ const styles = StyleSheet.create({
   eventTime: {
     fontFamily: Fonts.mono,
     fontSize: 9,
-    width: 20,
+    width: 28,
   },
   eventTitle: {
     fontFamily: Fonts.body,
     fontSize: 11,
     flex: 1,
+  },
+  overflowText: {
+    fontFamily: Fonts.mono,
+    fontSize: 9,
+    fontWeight: '600',
+    marginTop: 2,
   },
 });

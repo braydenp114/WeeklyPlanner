@@ -16,7 +16,7 @@ function ResponsiveLayout() {
   const { 
     isMobileMenuOpen, setIsMobileMenuOpen, isDesktop, 
     isNewTaskModalOpen, closeNewTaskModal, openNewTaskModal,
-    newTaskPrefillDate, newTaskPrefillHour
+    newTaskPrefillDate, newTaskPrefillHour, refreshTasks
   } = useNav();
   const pathname = usePathname();
 
@@ -42,9 +42,7 @@ function ResponsiveLayout() {
       <NewTaskModal
         visible={isNewTaskModalOpen}
         onClose={closeNewTaskModal}
-        onSaved={() => {
-          // TODO: refresh task list from Firestore (e.g. via an event bus or context)
-        }}
+        onSaved={refreshTasks}
         prefillDate={newTaskPrefillDate}
         prefillHour={newTaskPrefillHour}
       />

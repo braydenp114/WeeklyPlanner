@@ -99,6 +99,54 @@ export async function getTasksForRange(start: Date, end: Date): Promise<Task[]> 
 }
 
 /**
+ * Retrieves recurring task definitions that could potentially recur into a given range.
+ *
+ * Queries: ownerId == currentUser.uid, startDate <= rangeEnd
+ * Client-side filters:
+ *   - recurrence !== 'none'
+ *   - recurrenceEndDate is null OR recurrenceEndDate >= rangeStart (skip expired recurring tasks)
+ *
+ * NOTE: Requires a composite index on (ownerId ASC, startDate ASC) — same index as getTasksForRange.
+ *
+ * KNOWN SCALING LIMITATION: For users with many years of recurring tasks, this query still reads all
+ * non-expired recurring definitions. At very large scale, consider denormalizing occurrences or adding
+ * server-side recurrence expansion.
+ */
+export async function getRecurringTasks(rangeStart: Date, rangeEnd: Date): Promise<Task[]> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const rangeEndTimestamp = Timestamp.fromDate(rangeEnd);
+  const rangeStartTimestamp = Timestamp.fromDate(rangeStart);
+
+  // Fetch all user tasks that started on or before rangeEnd
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('startDate', '<=', rangeEndTimestamp)
+  );
+
+  const querySnapshot = await getDocs(q);
+  const tasks: Task[] = [];
+  querySnapshot.forEach((docSnap) => {
+    const data = { id: docSnap.id, ...docSnap.data() } as Task;
+
+    // Client-side filter: only recurring tasks
+    if (data.recurrence === 'none') return;
+
+    // Client-side filter: skip expired recurring tasks whose end date is before the visible range
+    if (data.recurrenceEndDate) {
+      const endDate = data.recurrenceEndDate.toDate();
+      if (endDate < rangeStart) return;
+    }
+
+    tasks.push(data);
+  });
+
+  return tasks;
+}
+
+/**
  * Updates an existing task.
  */
 export async function updateTask(id: string, data: UpdateTaskData): Promise<void> {
