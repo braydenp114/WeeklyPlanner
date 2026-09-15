@@ -227,7 +227,7 @@ function mapExpandedTasksToItems(
 export default function WeeklyGrid() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
-  const { user, signOutUser } = useAuth();
+  const { user, loading: authLoading, signOutUser } = useAuth();
   const { isDesktop, setIsMobileMenuOpen, openNewTaskModal, taskRefreshKey } = useNav();
 
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -274,8 +274,20 @@ export default function WeeklyGrid() {
     return d;
   }, [lastDay?.getTime()]);
 
-  // ── Fetch tasks from Firestore ──
+  // ── Fetch tasks from Firestore (gated on auth readiness) ──
   useEffect(() => {
+    // Don't fetch until Firebase Auth has finished restoring the persisted session.
+    // Without this gate, auth.currentUser is null on reload and the service throws
+    // "User not authenticated" before onAuthStateChanged has fired.
+    if (authLoading || !user) {
+      // Clear tasks if the user signed out
+      if (!authLoading && !user) {
+        setTasks([]);
+        setAllDayTasks([]);
+      }
+      return;
+    }
+
     let cancelled = false;
 
     async function fetchTasks() {
@@ -317,7 +329,7 @@ export default function WeeklyGrid() {
       cancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rangeStart.getTime(), rangeEnd.getTime(), taskRefreshKey]);
+  }, [rangeStart.getTime(), rangeEnd.getTime(), taskRefreshKey, authLoading, user]);
 
   const handleSignOut = async () => {
     await signOutUser();

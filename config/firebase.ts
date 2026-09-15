@@ -4,6 +4,7 @@ import {
   initializeAuth,
   getAuth,
   GoogleAuthProvider,
+  browserLocalPersistence,
   // @ts-ignore
   getReactNativePersistence,
 } from 'firebase/auth';
@@ -27,17 +28,22 @@ const firebaseConfig = {
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Auth with platform-appropriate persistence to prevent console warning
+// Initialize Auth with platform-appropriate persistence
+// Web: explicit browserLocalPersistence so sessions survive full page reload
+// Native: AsyncStorage-backed persistence
 let authInstance;
 try {
   if (Platform.OS === 'web') {
-    authInstance = getAuth(app);
+    authInstance = initializeAuth(app, {
+      persistence: browserLocalPersistence,
+    });
   } else {
     authInstance = initializeAuth(app, {
       persistence: getReactNativePersistence(AsyncStorage),
     });
   }
 } catch (_err) {
+  // initializeAuth throws if already initialized — fall back to getAuth
   authInstance = getAuth(app);
 }
 
