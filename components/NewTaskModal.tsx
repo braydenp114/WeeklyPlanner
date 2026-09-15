@@ -18,7 +18,8 @@ import { Timestamp } from 'firebase/firestore';
 import { Colors, Fonts, RoundedGeometry, TaskCardColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
-import { createTask, CreateTaskData, TaskRecurrence, BusyStatus, Visibility, CustomRecurrenceRule } from '@/services/tasksService';
+import { useNav } from '@/context/NavContext';
+import { createTask, updateTask, CreateTaskData, TaskRecurrence, BusyStatus, Visibility, CustomRecurrenceRule } from '@/services/tasksService';
 import { CalendarPicker } from './ui/CalendarPicker';
 import { TimeDropdown, AnchorRect } from './ui/TimeDropdown';
 import { CustomRecurrenceModal } from './CustomRecurrenceModal';
@@ -111,6 +112,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const { user } = useAuth();
+  const { editTaskData } = useNav();
 
   // ── Form state ──
   const [title, setTitle] = useState('');
@@ -237,42 +239,85 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
     }
   }, [measureAnchor]);
 
-  // ── Reset form on open ──
+  // ── Reset or populate form on open ──
   useEffect(() => {
     if (visible) {
-      const now = prefillDate ? new Date(prefillDate) : new Date();
-      if (prefillHour !== undefined) {
-        now.setHours(prefillHour, 0, 0, 0);
+      if (editTaskData) {
+        // Pre-fill with existing task data
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTitle(editTaskData.title);
+        setStartDate(editTaskData.startDate.toDate());
+        setEndDate(editTaskData.endDate.toDate());
+        setAllDay(editTaskData.allDay);
+        setRecurrence(editTaskData.recurrence);
+        setCustomRecurrenceRule(editTaskData.customRecurrenceRule);
+        
+        let customLbl = '';
+        if (editTaskData.recurrence === 'custom' && editTaskData.customRecurrenceRule) {
+          const rule = editTaskData.customRecurrenceRule;
+          customLbl = `${rule.interval > 1 ? `Every ${rule.interval} ${rule.unit}s` : `Every ${rule.unit}`}`;
+          if (rule.unit === 'week' && rule.daysOfWeek) {
+            const dayNames = rule.daysOfWeek.map(d => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]);
+            customLbl += ` on ${dayNames.join(', ')}`;
+          }
+          if (rule.endType === 'after_occurrences') {
+            customLbl += `, ${rule.endOccurrences} times`;
+          } else if (rule.endType === 'on_date' && rule.endDate) {
+            customLbl += `, until ${dateFmt.format(rule.endDate.toDate())}`;
+          }
+        }
+        setCustomRuleLabel(customLbl);
+
+        setLocation(editTaskData.location || '');
+        if (editTaskData.latitude && editTaskData.longitude) {
+          setLocationCoordinates({ latitude: editTaskData.latitude, longitude: editTaskData.longitude });
+        } else {
+          setLocationCoordinates(null);
+        }
+
+        setNotifications(editTaskData.notification ? [editTaskData.notification] : []);
+        setColorHex(editTaskData.colorHex);
+        setBusyStatus(editTaskData.busyStatus);
+        setVisibility(editTaskData.visibility);
+        setDescription(editTaskData.description || '');
+        
       } else {
-        now.setMinutes(0, 0, 0);
+        // Default new task
+        const now = prefillDate ? new Date(prefillDate) : new Date();
+        if (prefillHour !== undefined) {
+          now.setHours(prefillHour, 0, 0, 0);
+        } else {
+          now.setMinutes(0, 0, 0);
+        }
+        const endDefault = new Date(now);
+        endDefault.setHours(endDefault.getHours() + 1);
+        
+        setTitle('');
+        setStartDate(now);
+        setEndDate(endDefault);
+        setAllDay(false);
+        setRecurrence('none');
+        setCustomRecurrenceRule(null);
+        setCustomRuleLabel('');
+        setLocation('');
+        setLocationCoordinates(null);
+        setNotifications([]);
+        setColorHex(COLOR_OPTIONS[0].hex);
+        setBusyStatus('busy');
+        setVisibility('default');
+        setDescription('');
       }
-      const endDefault = new Date(now);
-      endDefault.setHours(endDefault.getHours() + 1);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTitle('');
-      setStartDate(now);
-      setEndDate(endDefault);
-      setAllDay(false);
-      setRecurrence('none');
-      setCustomRecurrenceRule(null);
-      setCustomRuleLabel('');
-      setLocation('');
-      setLocationCoordinates(null);
+
       setStartDateAnchor(null);
       setEndDateAnchor(null);
       setStartTimeAnchor(null);
       setEndTimeAnchor(null);
-      setNotifications([]);
-      setColorHex(COLOR_OPTIONS[0].hex);
-      setBusyStatus('busy');
-      setVisibility('default');
-      setDescription('');
       setError('');
       setSaving(false);
       setColorPickerOpen(false);
       setNotifPickerOpen(false);
     }
-  }, [visible, prefillDate, prefillHour]);
+  }, [visible, prefillDate, prefillHour, editTaskData]);
 
   // ── Dynamic recurrence labels ──
   const recurrenceOptions = useMemo(() => {
@@ -320,7 +365,13 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
         description: description.trim() || null,
         colorHex,
       };
-      await createTask(taskData);
+
+      if (editTaskData && editTaskData.id) {
+        await updateTask(editTaskData.id, taskData);
+      } else {
+        await createTask(taskData);
+      }
+      
       onSaved?.();
       onClose();
     } catch (e: any) {
@@ -328,7 +379,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
     } finally {
       setSaving(false);
     }
-  }, [title, startDate, endDate, allDay, recurrence, customRecurrenceRule, location, locationCoordinates, notifications, busyStatus, visibility, description, colorHex, onSaved, onClose]);
+  }, [title, startDate, endDate, allDay, recurrence, customRecurrenceRule, location, locationCoordinates, notifications, busyStatus, visibility, description, colorHex, onSaved, onClose, editTaskData]);
 
   // ── Slide animation ──
   const slideAnim = useMemo(() => new Animated.Value(300), []);

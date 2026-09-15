@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -23,8 +23,10 @@ import {
 } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MonthlyGridView from './MonthlyGridView';
-import { getTasksForRange, getRecurringTasks, Task } from '@/services/tasksService';
-import { expandAllTasks, ExpandedTask } from '@/utils/expandRecurrences';
+import { getTasksForRange, Task, deleteTask } from '@/services/tasksService';
+import { AnchorRect } from './ui/TimeDropdown';
+import { ConfirmDialog } from './ConfirmDialog';
+import { TaskPreviewPopover } from './TaskPreviewPopover';
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
 
@@ -121,10 +123,12 @@ export type TaskItem = {
   actualDate: Date;
   /** The original Firestore document ID, for edit/delete operations. */
   originalTaskId: string;
-  /** Whether this is a generated recurrence instance. */
+  /** Whether this is part of a recurring series. */
   isRecurrenceInstance: boolean;
   /** Whether this is an all-day event. */
   isAllDay: boolean;
+  /** The full task data, used for popovers and edit functionality. */
+  originalTaskData: Task;
 };
 
 // ─── Mapping: ExpandedTask → TaskItem[] ─────────────────────────────────────
@@ -132,16 +136,16 @@ export type TaskItem = {
 
 
 /**
- * Maps expanded Firestore tasks to grid-local TaskItem entries.
- * Each expanded task may span multiple days; one TaskItem is created per visible day it overlaps.
+ * Maps Firestore tasks to grid-local TaskItem entries.
+ * Each task may span multiple days; one TaskItem is created per visible day it overlaps.
  */
-function mapExpandedTasksToItems(
-  expandedTasks: ExpandedTask[],
+function mapTasksToItems(
+  tasks: Task[],
   gridDates: Date[]
 ): TaskItem[] {
   const items: TaskItem[] = [];
 
-  for (const task of expandedTasks) {
+  for (const task of tasks) {
     const taskStart = task.startDate.toDate();
     const taskEnd = task.endDate.toDate();
     const tag = task.title.split(/\s+/)[0] || '';
@@ -158,7 +162,7 @@ function mapExpandedTasksToItems(
 
       if (task.allDay) {
         items.push({
-          id: `${task.occurrenceId}-day${dayIdx}`,
+          id: `${task.id}-day${dayIdx}`,
           title: task.title,
           dayIndex: dayIdx,
           startHour: 0,
@@ -166,9 +170,10 @@ function mapExpandedTasksToItems(
           colorHex: task.colorHex,
           tag,
           actualDate: gridDate,
-          originalTaskId: task.originalTaskId,
-          isRecurrenceInstance: task.isRecurrenceInstance,
+          originalTaskId: task.id || '',
+          isRecurrenceInstance: !!task.seriesId,
           isAllDay: true,
+          originalTaskData: task,
         });
         continue;
       }
@@ -187,7 +192,7 @@ function mapExpandedTasksToItems(
       const durationHours = Math.max(endHour - startHour, 0.25); // min 15min visual height
 
       items.push({
-        id: `${task.occurrenceId}-day${dayIdx}`,
+        id: `${task.id}-day${dayIdx}`,
         title: task.title,
         dayIndex: dayIdx,
         startHour,
@@ -195,15 +200,93 @@ function mapExpandedTasksToItems(
         colorHex: task.colorHex,
         tag,
         actualDate: gridDate,
-        originalTaskId: task.originalTaskId,
-        isRecurrenceInstance: task.isRecurrenceInstance,
+        originalTaskId: task.id || '',
+        isRecurrenceInstance: !!task.seriesId,
         isAllDay: false,
+        originalTaskData: task,
       });
     }
   }
 
   return items;
 }
+
+export function getPastColor(hex: string) {
+  if (!hex || hex.length < 7) return hex;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  // Blend 50% with dark gray (80,80,80)
+  const nr = Math.floor(r * 0.5 + 80 * 0.5);
+  const ng = Math.floor(g * 0.5 + 80 * 0.5);
+  const nb = Math.floor(b * 0.5 + 80 * 0.5);
+  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
+}
+
+export function getPastEventStyle(isPast: boolean, baseHex: string) {
+  if (!isPast) return { backgroundColor: baseHex };
+  if (Platform.OS === 'web') {
+    return { backgroundColor: baseHex, filter: 'saturate(50%) brightness(70%)' } as any;
+  }
+  return { backgroundColor: getPastColor(baseHex) };
+}
+
+export const HoverableTaskCard = ({
+  task,
+  style,
+  children,
+  onPress,
+}: {
+  task: TaskItem;
+  style: any;
+  children: React.ReactNode;
+  onPress: (task: TaskItem, anchor: AnchorRect) => void;
+}) => {
+  const [isHovered, setIsHovered] = React.useState(false);
+  const ref = React.useRef<any>(null);
+
+  const handlePress = () => {
+    if (ref.current) {
+      if (Platform.OS === 'web' && typeof ref.current.getBoundingClientRect === 'function') {
+        const rect = ref.current.getBoundingClientRect();
+        onPress(task, { x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+      } else if (typeof ref.current.measureInWindow === 'function') {
+        ref.current.measureInWindow((x: number, y: number, width: number, height: number) => {
+          onPress(task, { x, y, width, height });
+        });
+      } else if (typeof ref.current.measure === 'function') {
+        ref.current.measure((_fx: number, _fy: number, width: number, height: number, px: number, py: number) => {
+          onPress(task, { x: px, y: py, width, height });
+        });
+      }
+    }
+  };
+
+  const hoverStyle = Platform.OS === 'web'
+    ? {
+        transition: 'all 150ms ease',
+        transform: isHovered ? [{ scale: 1.02 }] : [{ scale: 1 }],
+        ...(isHovered ? { opacity: 0.9, zIndex: 100 } : {}),
+      }
+    : {};
+
+  const bind = Platform.OS === 'web' ? {
+    onMouseEnter: () => setIsHovered(true),
+    onMouseLeave: () => setIsHovered(false),
+  } : {};
+
+  return (
+    <TouchableOpacity
+      ref={ref}
+      activeOpacity={0.85}
+      style={[style, hoverStyle]}
+      onPress={handlePress}
+      {...bind as any}
+    >
+      {children}
+    </TouchableOpacity>
+  );
+};
 
 /**
  * The main grid component displaying a weekly view of tasks.
@@ -222,6 +305,42 @@ export default function WeeklyGrid() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const [gridHeight, setGridHeight] = useState(0);
+
+  // ── Popover State ──
+  const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
+  const [popoverAnchor, setPopoverAnchor] = useState<AnchorRect | null>(null);
+
+  const handleTaskClick = useCallback((task: TaskItem, anchor: AnchorRect) => {
+    setSelectedTask(task);
+    setPopoverAnchor(anchor);
+  }, []);
+
+  const { openEditTaskModal, refreshTasks } = useNav();
+
+  const handleEditTask = useCallback((task: TaskItem) => {
+    setSelectedTask(null);
+    openEditTaskModal(task.originalTaskData);
+  }, [openEditTaskModal]);
+
+  const [deleteConfirmTask, setDeleteConfirmTask] = useState<TaskItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDeleteTask = useCallback((task: TaskItem) => {
+    setDeleteConfirmTask(task);
+  }, []);
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmTask) return;
+    setIsDeleting(true);
+    try {
+      await deleteTask(deleteConfirmTask.originalTaskId);
+      setSelectedTask(null);
+      refreshTasks();
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirmTask(null);
+    }
+  };
 
   // ── Firestore task data ──
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -276,20 +395,12 @@ export default function WeeklyGrid() {
       setTasksError(null);
 
       try {
-        // Fetch both: tasks in range + recurring tasks that may recur into range
-        const [rangeTasks, recurringTasks] = await Promise.all([
-          getTasksForRange(rangeStart, rangeEnd),
-          getRecurringTasks(rangeStart, rangeEnd),
-        ]);
+        const fetchedTasks = await getTasksForRange(rangeStart, rangeEnd);
 
         if (cancelled) return;
 
-        // Merge and deduplicate, then expand recurrences
-        const allRawTasks: Task[] = [...rangeTasks, ...recurringTasks];
-        const expanded = expandAllTasks(allRawTasks, rangeStart, rangeEnd);
-
         // Map to grid-local TaskItem format
-        const items = mapExpandedTasksToItems(expanded, weekDates);
+        const items = mapTasksToItems(fetchedTasks, weekDates);
 
         // Separate all-day and timed tasks
         setAllDayTasks(items.filter((t) => t.isAllDay));
@@ -312,6 +423,58 @@ export default function WeeklyGrid() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeStart.getTime(), rangeEnd.getTime(), taskRefreshKey, authLoading, user]);
 
+  // ── Layout Algorithm for Staggered Events ──
+  const layoutMap = useMemo(() => {
+    const map = new Map<string, { col: number; maxCols: number }>();
+    
+    // Process day by day
+    for (const dayIdx of [0, 1, 2, 3, 4, 5, 6]) {
+      const dayTasks = tasks.filter(t => t.dayIndex === dayIdx);
+      const sorted = [...dayTasks].sort((a, b) => a.startHour - b.startHour || b.durationHours - a.durationHours);
+      
+      let currentCluster: TaskItem[] = [];
+      let clusterEnd = 0;
+      
+      const processCluster = (cluster: TaskItem[]) => {
+        const columns: TaskItem[][] = [];
+        for (const task of cluster) {
+          let placed = false;
+          for (let i = 0; i < columns.length; i++) {
+             const lastInCol = columns[i][columns[i].length - 1];
+             if (lastInCol.startHour + lastInCol.durationHours <= task.startHour) {
+                columns[i].push(task);
+                placed = true;
+                map.set(task.id, { col: i, maxCols: 0 });
+                break;
+             }
+          }
+          if (!placed) {
+            columns.push([task]);
+            map.set(task.id, { col: columns.length - 1, maxCols: 0 });
+          }
+        }
+        for (const task of cluster) {
+           const l = map.get(task.id)!;
+           l.maxCols = columns.length;
+           map.set(task.id, l);
+        }
+      };
+
+      for (const task of sorted) {
+        if (currentCluster.length > 0 && task.startHour >= clusterEnd) {
+          processCluster(currentCluster);
+          currentCluster = [];
+          clusterEnd = 0;
+        }
+        currentCluster.push(task);
+        clusterEnd = Math.max(clusterEnd, task.startHour + task.durationHours);
+      }
+      if (currentCluster.length > 0) {
+        processCluster(currentCluster);
+      }
+    }
+    return map;
+  }, [tasks]);
 
 
   return (
@@ -430,6 +593,7 @@ export default function WeeklyGrid() {
             setViewMode('Day');
             setIsDropdownOpen(false);
           }}
+          onTaskClick={handleTaskClick}
         />
       ) : (
         <ScrollView
@@ -510,19 +674,26 @@ export default function WeeklyGrid() {
                         key={`allday-${date.toISOString()}`}
                         style={[styles.allDayColumn, { borderColor: theme.outlineVariant }]}
                       >
-                        {dayAllDayTasks.map((task) => (
-                          <View
-                            key={task.id}
-                            style={[
-                              styles.allDayChip,
-                              { backgroundColor: task.colorHex },
-                            ]}
-                          >
-                            <Text style={styles.allDayChipText} numberOfLines={1}>
-                              {task.title}
-                            </Text>
-                          </View>
-                        ))}
+                        {dayAllDayTasks.map((task) => {
+                          const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
+                          const pastStyles = getPastEventStyle(isPast, task.colorHex);
+                          
+                          return (
+                            <HoverableTaskCard
+                              key={task.id}
+                              task={task}
+                              style={[
+                                styles.allDayChip,
+                                pastStyles,
+                              ]}
+                              onPress={handleTaskClick}
+                            >
+                              <Text style={[styles.allDayChipText, isPast && { color: 'rgba(255,255,255,0.85)' }]} numberOfLines={1}>
+                                {task.title}
+                              </Text>
+                            </HoverableTaskCard>
+                          );
+                        })}
                       </View>
                     );
                   })}
@@ -595,39 +766,55 @@ export default function WeeklyGrid() {
                       .map((task) => {
                         const topOffset = task.startHour * rowHeight;
                         const cardHeight = task.durationHours * rowHeight - 6;
+                        
+                        const layout = layoutMap.get(task.id);
+                        const col = layout?.col || 0;
+                        const maxCols = layout?.maxCols || 1;
+                        
+                        // Staggered layout logic
+                        const leftPct = maxCols > 1 ? Math.min(col * 30, 70) : 0;
+                        const widthPct = maxCols > 1 ? 100 - leftPct : 100;
+                        const baseZIndex = col + 1;
+                        
+                        const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
+                        const pastStyles = getPastEventStyle(isPast, task.colorHex);
 
                         return (
-                          <TouchableOpacity
+                          <HoverableTaskCard
                             key={task.id}
-                            activeOpacity={0.85}
+                            task={task}
                             style={[
                               styles.taskCard,
+                              pastStyles,
                               {
                                 top: topOffset + 3,
                                 height: cardHeight,
-                                backgroundColor: task.colorHex,
+                                left: `${leftPct}%`,
+                                width: `${widthPct}%`,
+                                zIndex: baseZIndex,
                                 borderColor: theme.glassBorder,
                               },
                             ]}
+                            onPress={handleTaskClick}
                           >
                             <View style={styles.taskCardHeader}>
-                              <Text style={styles.taskTagText}>{task.tag}</Text>
-                              <Text style={styles.taskTimeText}>
+                              <Text style={[styles.taskTagText, isPast && { opacity: 0.8 }]}>{task.tag}</Text>
+                              <Text style={[styles.taskTimeText, isPast && { color: 'rgba(255,255,255,0.7)' }]}>
                                 {String(Math.floor(task.startHour)).padStart(2, '0')}:
                                 {String(Math.round((task.startHour % 1) * 60)).padStart(2, '0')}
                               </Text>
                             </View>
 
-                            <Text style={styles.taskTitleText} numberOfLines={2}>
+                            <Text style={[styles.taskTitleText, isPast && { color: 'rgba(255,255,255,0.85)' }]} numberOfLines={2}>
                               {task.title}
                             </Text>
 
                             {task.isRecurrenceInstance && (
                               <View style={styles.recurrenceBadge}>
-                                <MaterialIcons name="repeat" size={10} color="rgba(255,255,255,0.8)" />
+                                <MaterialIcons name="repeat" size={10} color={isPast ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.8)"} />
                               </View>
                             )}
-                          </TouchableOpacity>
+                          </HoverableTaskCard>
                         );
                       })}
                   </View>
@@ -647,6 +834,27 @@ export default function WeeklyGrid() {
         </View>
       </ScrollView>
       )}
+      
+      <TaskPreviewPopover
+        visible={!!selectedTask}
+        onClose={() => setSelectedTask(null)}
+        task={selectedTask}
+        anchor={popoverAnchor}
+        onEdit={handleEditTask}
+        onDelete={handleDeleteTask}
+      />
+      
+      <ConfirmDialog
+        visible={!!deleteConfirmTask}
+        title="Delete this task?"
+        message="Are you sure you want to delete this task? This action cannot be undone."
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        isDestructive={true}
+        isLoading={isDeleting}
+        onConfirm={confirmDelete}
+        onClose={() => setDeleteConfirmTask(null)}
+      />
     </View>
   );
 }
@@ -839,8 +1047,6 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     position: 'absolute',
-    left: 3,
-    right: 3,
     borderRadius: RoundedGeometry.default, // 8px rounded rectangle
     padding: 6,
     borderWidth: 1,

@@ -1,135 +1,7 @@
 import { Timestamp } from 'firebase/firestore';
 import { Task, CustomRecurrenceRule } from '@/services/tasksService';
 
-/**
- * An expanded task occurrence, representing one instance of a (possibly recurring) task
- * within a visible date range.
- */
-export interface ExpandedTask extends Task {
-  /** Whether this is a generated recurrence instance (true) or the original task (false). */
-  isRecurrenceInstance: boolean;
-  /** The original Firestore document ID, for edit/delete operations. */
-  originalTaskId: string;
-  /** A unique composite ID for this specific occurrence (originalTaskId-YYYY-MM-DD). */
-  occurrenceId: string;
-}
-
-/** Maximum number of occurrences to generate per task to prevent runaway loops. */
-const MAX_OCCURRENCES_PER_TASK = 366;
-
-/**
- * Expands a single task into all of its occurrences that fall within [rangeStart, rangeEnd].
- *
- * For non-recurring tasks, returns the task as-is if it overlaps the range.
- * For recurring tasks, generates virtual ExpandedTask entries for each occurrence.
- *
- * endOccurrences counting: each individual emitted day counts as one occurrence,
- * NOT each interval cycle. E.g. "every 2 weeks on Mon/Wed" with endOccurrences=6
- * emits 6 individual day occurrences (3 cycles × 2 days/cycle).
- */
-export function expandTaskOccurrences(
-  task: Task,
-  rangeStart: Date,
-  rangeEnd: Date
-): ExpandedTask[] {
-  const taskId = task.id || '';
-  const taskStart = task.startDate.toDate();
-  const taskEnd = task.endDate.toDate();
-
-  // Extract original time components to preserve them across occurrences
-  const startHours = taskStart.getHours();
-  const startMinutes = taskStart.getMinutes();
-  const startSeconds = taskStart.getSeconds();
-
-  const durationMs = taskEnd.getTime() - taskStart.getTime();
-
-  // Helper to create an ExpandedTask for a given occurrence start date
-  const makeOccurrence = (occStart: Date, isInstance: boolean): ExpandedTask => {
-    const occEnd = new Date(occStart.getTime() + durationMs);
-    const dateKey = formatDateKey(occStart);
-    return {
-      ...task,
-      startDate: Timestamp.fromDate(occStart),
-      endDate: Timestamp.fromDate(occEnd),
-      isRecurrenceInstance: isInstance,
-      originalTaskId: taskId,
-      occurrenceId: isInstance ? `${taskId}-${dateKey}` : taskId,
-    };
-  };
-
-  // Non-recurring: return as-is if it overlaps the visible range
-  if (task.recurrence === 'none') {
-    if (taskEnd >= rangeStart && taskStart <= rangeEnd) {
-      return [makeOccurrence(taskStart, false)];
-    }
-    return [];
-  }
-
-  // Determine the recurrence end boundary
-  const recurrenceEndBound = getRecurrenceEndBound(task, rangeEnd);
-  const maxOccurrences = task.customRecurrenceRule?.endOccurrences ?? undefined;
-
-  const results: ExpandedTask[] = [];
-  let totalEmitted = 0;
-
-  // Generate occurrence dates
-  const occurrenceDates = generateOccurrenceDates(
-    task.recurrence,
-    task.customRecurrenceRule,
-    taskStart,
-    recurrenceEndBound
-  );
-
-  for (const occDate of occurrenceDates) {
-    // Safety cap
-    if (totalEmitted >= MAX_OCCURRENCES_PER_TASK) break;
-
-    // Check endOccurrences limit (counts each emitted day individually)
-    if (maxOccurrences !== undefined && totalEmitted >= maxOccurrences) break;
-
-    // PRESERVE ORIGINAL TIME: generators or DST shifts might have altered it
-    occDate.setHours(startHours, startMinutes, startSeconds, 0);
-
-    // Skip occurrences that end before the visible range starts
-    const occEnd = new Date(occDate.getTime() + durationMs);
-    if (occEnd < rangeStart) {
-      // Still count toward endOccurrences even if before visible range
-      totalEmitted++;
-      continue;
-    }
-
-    // Stop if occurrence starts after the visible range ends
-    if (occDate > rangeEnd) break;
-
-    const isFirst = occDate.getTime() === taskStart.getTime();
-    results.push(makeOccurrence(occDate, !isFirst));
-    totalEmitted++;
-  }
-
-  return results;
-}
-
-/**
- * Expands multiple tasks into all their occurrences within the visible range.
- * Deduplicates by task ID (recurring tasks fetched by both range query and recurring query).
- */
-export function expandAllTasks(
-  tasks: Task[],
-  rangeStart: Date,
-  rangeEnd: Date
-): ExpandedTask[] {
-  // Deduplicate by task ID
-  const seen = new Set<string>();
-  const uniqueTasks: Task[] = [];
-  for (const task of tasks) {
-    const id = task.id || '';
-    if (id && seen.has(id)) continue;
-    if (id) seen.add(id);
-    uniqueTasks.push(task);
-  }
-
-  return uniqueTasks.flatMap((task) => expandTaskOccurrences(task, rangeStart, rangeEnd));
-}
+export const MAX_OCCURRENCES_PER_TASK = 366;
 
 // ─── Internal Helpers ─────────────────────────────────────────────────────────
 
@@ -140,7 +12,7 @@ function formatDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
-function getRecurrenceEndBound(task: Task, rangeEnd: Date): Date {
+export function getRecurrenceEndBound(task: Task, rangeEnd: Date): Date {
   let bound = rangeEnd;
 
   if (task.recurrenceEndDate) {
@@ -155,7 +27,7 @@ function getRecurrenceEndBound(task: Task, rangeEnd: Date): Date {
  * Generator that yields occurrence start dates for a recurring task.
  * Yields dates from the task's original start date up to the end bound.
  */
-function* generateOccurrenceDates(
+export function* generateOccurrenceDates(
   recurrence: string,
   customRule: CustomRecurrenceRule | null,
   taskStart: Date,
