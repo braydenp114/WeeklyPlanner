@@ -5,6 +5,7 @@ import { NavIcon, NavIconName } from './NavIcon';
 import { Colors, Typography, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
+import { useNav } from '@/context/NavContext';
 
 const NAV_ITEMS = [
   { name: 'Weekly Grid', icon: 'gridview', route: '/' },
@@ -17,6 +18,7 @@ export function Sidebar() {
   const theme = Colors[scheme];
   const pathname = usePathname();
   const { user } = useAuth();
+  const { openNewTaskModal } = useNav();
 
   return (
     <View style={[styles.container, { backgroundColor: theme.glassBackground, borderRightColor: theme.glassBorder }]}>
@@ -25,6 +27,7 @@ export function Sidebar() {
         <TouchableOpacity 
           style={[styles.newTaskButton, { backgroundColor: theme.primaryAction, borderRadius: RoundedGeometry.full }]}
           activeOpacity={0.8}
+          onPress={() => openNewTaskModal()}
         >
           <NavIcon name="add" size={12} color="#FFFFFF" />
           <Text style={[styles.newTaskText, Typography.labelMd, { color: '#FFFFFF' }]}>New Task</Text>

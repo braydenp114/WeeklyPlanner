@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,15 +12,16 @@ import { router } from 'expo-router';
 import { useAuth } from '@/context/AuthContext';
 import { useNav } from '@/context/NavContext';
 import { NavIcon } from '@/components/NavIcon';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import {
   Colors,
   Fonts,
   Glassmorphism,
   RoundedGeometry,
-  TaskCardColors,
   Typography,
 } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import MonthlyGridView from './MonthlyGridView';
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
 
@@ -58,16 +60,57 @@ function getStartOfWeek(date: Date) {
   return result;
 }
 
-function getWeekDates(offsetWeeks = 0) {
-  const targetDate = new Date();
-  targetDate.setDate(targetDate.getDate() + offsetWeeks * 7);
-  const start = getStartOfWeek(targetDate);
+type ViewMode = 'Day' | 'Week' | '7 Days' | 'Month';
 
-  return Array.from({ length: 7 }, (_, index) => {
-    const value = new Date(start);
-    value.setDate(start.getDate() + index);
-    return value;
-  });
+function getGridDates(viewMode: ViewMode, offset: number) {
+  const targetDate = new Date();
+
+  if (viewMode === 'Month') {
+    targetDate.setMonth(targetDate.getMonth() + offset);
+    const firstDayOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth(), 1);
+    const start = getStartOfWeek(firstDayOfMonth);
+    
+    const lastDayOfMonth = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 0);
+    const end = new Date(lastDayOfMonth);
+    const endDay = end.getDay();
+    const endDiff = endDay === 0 ? 0 : 7 - endDay;
+    end.setDate(end.getDate() + endDiff);
+    
+    const days = [];
+    let current = new Date(start);
+    while (current <= end) {
+      days.push(new Date(current));
+      current.setDate(current.getDate() + 1);
+    }
+    return days;
+  }
+
+  if (viewMode === 'Week') {
+    targetDate.setDate(targetDate.getDate() + offset * 7);
+    const start = getStartOfWeek(targetDate);
+    return Array.from({ length: 7 }, (_, index) => {
+      const value = new Date(start);
+      value.setDate(start.getDate() + index);
+      return value;
+    });
+  }
+
+  if (viewMode === 'Day') {
+    targetDate.setDate(targetDate.getDate() + offset);
+    targetDate.setHours(0, 0, 0, 0);
+    return [targetDate];
+  }
+
+  if (viewMode === '7 Days') {
+    targetDate.setDate(targetDate.getDate() + offset * 7);
+    targetDate.setHours(0, 0, 0, 0);
+    return Array.from({ length: 7 }, (_, index) => {
+      const value = new Date(targetDate);
+      value.setDate(targetDate.getDate() + index);
+      return value;
+    });
+  }
+  return [];
 }
 
 export type TaskItem = {
@@ -90,16 +133,16 @@ export default function WeeklyGrid() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const { user, signOutUser } = useAuth();
-  const { isDesktop, setIsMobileMenuOpen } = useNav();
+  const { isDesktop, setIsMobileMenuOpen, openNewTaskModal } = useNav();
   const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
 
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [viewMode, setViewMode] = useState<ViewMode>('Week');
+  const [dateOffset, setDateOffset] = useState(0);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
   const [gridHeight, setGridHeight] = useState(0);
-
-  const rowHeight = gridHeight > 0 ? gridHeight / 24 : 52;
 
   useEffect(() => {
     // Update the current time every minute to keep the "current time" line accurate
@@ -108,9 +151,12 @@ export default function WeeklyGrid() {
     }, 60000);
     return () => clearInterval(timer);
   }, []);
-  const weekDates = getWeekDates(weekOffset);
+  const weekDates = getGridDates(viewMode, dateOffset);
+  const MIN_ROW_HEIGHT = 50;
+  const MIN_DAY_COLUMN_WIDTH = 100;
+  const rowHeight = Math.max(gridHeight > 0 ? gridHeight / 24 : 52, MIN_ROW_HEIGHT);
   const firstDay = weekDates[0];
-  const lastDay = weekDates[6];
+  const lastDay = weekDates[weekDates.length - 1];
 
   const filteredTasks = selectedTagFilter
     ? initialSampleTasks.filter((t) => t.colorHex === selectedTagFilter)
@@ -130,6 +176,7 @@ export default function WeeklyGrid() {
           {
             backgroundColor: theme.glassBackground,
             borderColor: theme.glassBorder,
+            zIndex: 50,
           },
         ]}
       >
@@ -144,9 +191,10 @@ export default function WeeklyGrid() {
             </TouchableOpacity>
           )}
 
+
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => setWeekOffset(0)}
+            onPress={() => setDateOffset(0)}
             style={[styles.todayButton, { backgroundColor: theme.surfaceContainer, borderColor: theme.outlineVariant }]}
           >
             <Text style={[styles.todayText, { color: theme.text }]}>Today</Text>
@@ -154,175 +202,243 @@ export default function WeeklyGrid() {
 
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => setWeekOffset(prev => prev - 1)}
+            onPress={() => setDateOffset(prev => prev - 1)}
             style={[styles.arrowButton, { backgroundColor: theme.surfaceContainer }]}
           >
             <Text style={[styles.arrowText, { color: theme.text }]}>‹</Text>
           </TouchableOpacity>
 
           <Text style={[styles.dateLabel, { color: theme.text }]}>
-            {monthYearFormatter.format(firstDay)}
+            {viewMode === 'Month'
+              ? monthYearFormatter.format(weekDates[Math.floor(weekDates.length / 2)])
+              : viewMode === 'Day' 
+              ? monthYearFormatter.format(firstDay)
+              : (firstDay.getMonth() === lastDay.getMonth() 
+                  ? monthYearFormatter.format(firstDay) 
+                  : `${monthYearFormatter.format(firstDay).split(' ')[0]} - ${monthYearFormatter.format(lastDay)}`)}
           </Text>
 
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => setWeekOffset(prev => prev + 1)}
+            onPress={() => setDateOffset(prev => prev + 1)}
             style={[styles.arrowButton, { backgroundColor: theme.surfaceContainer }]}
           >
             <Text style={[styles.arrowText, { color: theme.text }]}>›</Text>
           </TouchableOpacity>
         </View>
-      </View>
 
-      {/* Days Header Row */}
-      <View
-        style={[
-          styles.headerRowContainer,
-          {
-            backgroundColor: theme.surfaceContainerLow,
-            borderColor: theme.outlineVariant,
-          },
-        ]}
-      >
-        <View style={[styles.timeColumnHeaderSpacer, { borderColor: theme.outlineVariant }]} />
-
-        <View style={styles.dayHeaderRow}>
-          {weekDates.map((date, idx) => {
-            const isToday = date.toDateString() === currentDate.toDateString();
-            return (
-              <View
-                key={date.toISOString()}
-                style={[
-                  styles.dayHeaderCell,
-                  { borderColor: theme.outlineVariant },
-                  isToday && { backgroundColor: theme.surfaceContainerHighest },
-                ]}
-              >
-                <Text style={[styles.dayHeaderName, { color: theme.textSecondary }]}>
-                  {dayFormatter.format(date).toUpperCase()}
-                </Text>
-                <View
-                  style={[
-                    styles.dayNumberBadge,
-                    isToday && { backgroundColor: theme.primaryAction },
-                  ]}
+        <View style={{ position: 'relative', zIndex: 50 }}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setIsDropdownOpen(!isDropdownOpen)}
+            style={[styles.dropdownButton, { backgroundColor: theme.surfaceContainer, borderColor: theme.outlineVariant }]}
+          >
+            <Text style={[styles.dropdownText, { color: theme.text }]}>{viewMode}</Text>
+            <MaterialIcons name="arrow-drop-down" size={18} color={theme.onSurfaceVariant} />
+          </TouchableOpacity>
+          {isDropdownOpen && (
+            <View style={[styles.dropdownMenu, { backgroundColor: theme.surfaceContainerHighest, borderColor: theme.outlineVariant, right: 0, left: 'auto' }]}>
+              {(['Day', 'Week', '7 Days', 'Month'] as ViewMode[]).map((mode) => (
+                <TouchableOpacity
+                  key={mode}
+                  style={styles.dropdownMenuItem}
+                  onPress={() => {
+                    setViewMode(mode);
+                    setDateOffset(0);
+                    setIsDropdownOpen(false);
+                  }}
                 >
-                  <Text
-                    style={[
-                      styles.dayHeaderNumber,
-                      { color: isToday ? '#FFFFFF' : theme.text },
-                    ]}
-                  >
-                    {dayNumFormatter.format(date)}
-                  </Text>
-                </View>
-              </View>
-            );
-          })}
+                  <Text style={[styles.dropdownMenuItemText, { color: theme.text }]}>{mode}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
       </View>
 
-      {/* Scrollable Hourly Timeline */}
-      <View
-        style={[styles.timelineScroll, { backgroundColor: theme.background }]}
-        onLayout={(e) => setGridHeight(e.nativeEvent.layout.height)}
-      >
-        <View style={styles.gridBody}>
-          {/* Time Labels Column */}
-          <View
-            style={[
-              styles.timeColumn,
-              {
-                backgroundColor: theme.surfaceContainerLow,
-                borderColor: theme.outlineVariant,
-              },
-            ]}
+      {viewMode === 'Month' ? (
+        <MonthlyGridView 
+          dates={weekDates} 
+          currentDate={currentDate} 
+          tasks={filteredTasks} 
+          onDayClick={(date) => {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            const target = new Date(date);
+            target.setHours(0,0,0,0);
+            const diffTime = target.getTime() - today.getTime();
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+            setDateOffset(diffDays);
+            setViewMode('Day');
+            setIsDropdownOpen(false);
+          }}
+        />
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator
+          contentContainerStyle={styles.horizontalGridContent}
+          {...(Platform.OS === 'web' ? { dataSet: { class: 'scrollbar-horizontal' } } as any : {})}
+        >
+          <View style={{ minWidth: MIN_DAY_COLUMN_WIDTH * weekDates.length + 54, flex: 1 }}>
+          {/* Scrollable Hourly Timeline with sticky day header */}
+          <ScrollView
+            style={[styles.timelineScroll, { backgroundColor: theme.background }]}
+            contentContainerStyle={styles.timelineContent}
+            showsVerticalScrollIndicator={true}
+            onLayout={(e) => setGridHeight(e.nativeEvent.layout.height)}
+            stickyHeaderIndices={[0]}
+            {...(Platform.OS === 'web' ? { dataSet: { class: 'scrollbar-vertical' } } as any : {})}
           >
-            {/* Empty spacer blocks to maintain column height */}
-            {hours.map((hour) => (
-              <View key={hour} style={[styles.timeSlot, { height: rowHeight }]} />
-            ))}
-            {/* Time labels positioned on the grid lines (skip midnight) */}
-            {hours.filter((h) => h > 0).map((hour) => (
-              <Text
-                key={`label-${hour}`}
-                style={[
-                  styles.timeLabelText,
-                  { color: theme.textMuted, top: hour * rowHeight - 7 },
-                ]}
-              >
-                {String(hour).padStart(2, '0')}:00
-              </Text>
-            ))}
-          </View>
+            {/* Days Header Row — sticky at top */}
+            <View
+              style={[
+                styles.headerRowContainer,
+                {
+                  backgroundColor: theme.surfaceContainerLow,
+                  borderColor: theme.outlineVariant,
+                },
+              ]}
+            >
+              <View style={[styles.timeColumnHeaderSpacer, { borderColor: theme.outlineVariant }]} />
 
-          {/* Days Grid Columns with Task Overlay */}
-          <View style={styles.daysRow}>
-            {weekDates.map((date, dayIdx) => (
-              <View
-                key={`${date.toISOString()}-column`}
-                style={[styles.dayColumn, { borderColor: theme.outlineVariant }]}
-              >
-                {hours.map((hour) => (
-                  <View
-                    key={`${date.toISOString()}-${hour}`}
-                    style={[styles.hourCell, { borderColor: theme.outlineVariant, height: rowHeight }]}
-                  />
-                ))}
-
-                {/* Render Current Time Line if Today */}
-                {isToday(date) && (
-                  <View
-                    style={[
-                      styles.currentTimeLine,
-                      {
-                        top: (currentDate.getHours() + currentDate.getMinutes() / 60) * rowHeight,
-                        backgroundColor: theme.primaryAction,
-                      },
-                    ]}
-                  />
-                )}
-
-
-                {/* Render Task Cards belonging to this day */}
-                {filteredTasks
-                  .filter((task) => task.dayIndex === dayIdx)
-                  .map((task) => {
-                    const topOffset = task.startHour * rowHeight;
-                    const cardHeight = task.durationHours * rowHeight - 6;
-
-                    return (
-                      <TouchableOpacity
-                        key={task.id}
-                        activeOpacity={0.85}
+              <View style={styles.dayHeaderRow}>
+                {weekDates.map((date, idx) => {
+                  const isToday = date.toDateString() === currentDate.toDateString();
+                  return (
+                    <View
+                      key={date.toISOString()}
+                      style={[
+                        styles.dayHeaderCell,
+                        { borderColor: theme.outlineVariant },
+                        isToday && { backgroundColor: theme.surfaceContainerHighest },
+                      ]}
+                    >
+                      <Text style={[styles.dayHeaderName, { color: theme.textSecondary }]}>
+                        {dayFormatter.format(date).toUpperCase()}
+                      </Text>
+                      <View
                         style={[
-                          styles.taskCard,
-                          {
-                            top: topOffset + 3,
-                            height: cardHeight,
-                            backgroundColor: task.colorHex,
-                            borderColor: theme.glassBorder,
-                          },
+                          styles.dayNumberBadge,
+                          isToday && { backgroundColor: theme.primaryAction },
                         ]}
                       >
-                        <View style={styles.taskCardHeader}>
-                          <Text style={styles.taskTagText}>{task.tag}</Text>
-                          <Text style={styles.taskTimeText}>
-                            {String(task.startHour).padStart(2, '0')}:00
-                          </Text>
-                        </View>
-
-                        <Text style={styles.taskTitleText} numberOfLines={2}>
-                          {task.title}
+                        <Text
+                          style={[
+                            styles.dayHeaderNumber,
+                            { color: isToday ? '#FFFFFF' : theme.text },
+                          ]}
+                        >
+                          {dayNumFormatter.format(date)}
                         </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                      </View>
+                    </View>
+                  );
+                })}
               </View>
-            ))}
-          </View>
+            </View>
+
+            {/* Grid body */}
+            <View style={styles.gridBody}>
+              {/* Time Labels Column */}
+              <View
+                style={[
+                  styles.timeColumn,
+                  {
+                    backgroundColor: theme.surfaceContainerLow,
+                    borderColor: theme.outlineVariant,
+                  },
+                ]}
+              >
+                {/* Empty spacer blocks to maintain column height */}
+                {hours.map((hour) => (
+                  <View key={hour} style={[styles.timeSlot, { height: rowHeight }]} />
+                ))}
+                {/* Time labels positioned on the grid lines (skip midnight) */}
+                {hours.filter((h) => h > 0).map((hour) => (
+                  <Text
+                    key={`label-${hour}`}
+                    style={[
+                      styles.timeLabelText,
+                      { color: theme.textMuted, top: hour * rowHeight - 7 },
+                    ]}
+                  >
+                    {String(hour).padStart(2, '0')}:00
+                  </Text>
+                ))}
+              </View>
+
+              {/* Days Grid Columns with Task Overlay */}
+              <View style={styles.daysRow}>
+                {weekDates.map((date, dayIdx) => (
+                  <View
+                    key={`${date.toISOString()}-column`}
+                    style={[styles.dayColumn, { borderColor: theme.outlineVariant }]}
+                  >
+                    {hours.map((hour) => (
+                      <TouchableOpacity
+                        key={`${date.toISOString()}-${hour}`}
+                        style={[styles.hourCell, { borderColor: theme.outlineVariant, height: rowHeight }]}
+                        activeOpacity={0.6}
+                        onPress={() => openNewTaskModal(date, hour)}
+                      />
+                    ))}
+
+                    {/* Render Current Time Line if Today */}
+                    {isToday(date) && (
+                      <View
+                        style={[
+                          styles.currentTimeLine,
+                          {
+                            top: (currentDate.getHours() + currentDate.getMinutes() / 60) * rowHeight,
+                            backgroundColor: theme.primaryAction,
+                          },
+                        ]}
+                      />
+                    )}
+
+                    {/* Render Task Cards belonging to this day */}
+                    {filteredTasks
+                      .filter((task) => task.dayIndex === dayIdx)
+                      .map((task) => {
+                        const topOffset = task.startHour * rowHeight;
+                        const cardHeight = task.durationHours * rowHeight - 6;
+
+                        return (
+                          <TouchableOpacity
+                            key={task.id}
+                            activeOpacity={0.85}
+                            style={[
+                              styles.taskCard,
+                              {
+                                top: topOffset + 3,
+                                height: cardHeight,
+                                backgroundColor: task.colorHex,
+                                borderColor: theme.glassBorder,
+                              },
+                            ]}
+                          >
+                            <View style={styles.taskCardHeader}>
+                              <Text style={styles.taskTagText}>{task.tag}</Text>
+                              <Text style={styles.taskTimeText}>
+                                {String(task.startHour).padStart(2, '0')}:00
+                              </Text>
+                            </View>
+
+                            <Text style={styles.taskTitleText} numberOfLines={2}>
+                              {task.title}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                  </View>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
         </View>
-      </View>
+      </ScrollView>
+      )}
     </View>
   );
 }
@@ -473,9 +589,11 @@ const styles = StyleSheet.create({
   dayHeaderRow: {
     flex: 1,
     flexDirection: 'row',
+    minWidth: 0,
   },
   dayHeaderCell: {
     flex: 1,
+    minWidth: 100,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
@@ -503,6 +621,9 @@ const styles = StyleSheet.create({
   timelineScroll: {
     flex: 1,
     marginTop: 4,
+  },
+  horizontalGridContent: {
+    flexGrow: 1,
   },
   timelineContent: {
     paddingBottom: 24,
@@ -532,6 +653,7 @@ const styles = StyleSheet.create({
   },
   dayColumn: {
     flex: 1,
+    minWidth: 100,
     borderRightWidth: 1,
     position: 'relative',
   },
@@ -588,5 +710,45 @@ const styles = StyleSheet.create({
     right: 0,
     height: 2,
     zIndex: 10,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: RoundedGeometry.sm,
+    borderWidth: 1,
+    justifyContent: 'center',
+  },
+  dropdownText: {
+    fontFamily: Fonts.mono,
+    fontSize: Typography.labelSm.fontSize,
+    fontWeight: '600',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: 4,
+    borderWidth: 1,
+    borderRadius: RoundedGeometry.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+    minWidth: 100,
+  },
+  dropdownMenuItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.05)',
+  },
+  dropdownMenuItemText: {
+    fontFamily: Fonts.mono,
+    fontSize: Typography.labelSm.fontSize,
+    fontWeight: '500',
   },
 });

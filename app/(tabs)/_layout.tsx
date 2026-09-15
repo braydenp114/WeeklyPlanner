@@ -7,12 +7,17 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { Sidebar } from "@/components/Sidebar";
 import { HamburgerMenu } from "@/components/HamburgerMenu";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
+import NewTaskModal from "@/components/NewTaskModal";
 import { NavProvider, useNav } from "@/context/NavContext";
 
 function ResponsiveLayout() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const { isMobileMenuOpen, setIsMobileMenuOpen, isDesktop } = useNav();
+  const { 
+    isMobileMenuOpen, setIsMobileMenuOpen, isDesktop, 
+    isNewTaskModalOpen, closeNewTaskModal, openNewTaskModal,
+    newTaskPrefillDate, newTaskPrefillHour
+  } = useNav();
   const pathname = usePathname();
 
   // Show FAB on mobile, specifically on the root (calendar) page
@@ -24,7 +29,7 @@ function ResponsiveLayout() {
 
       <View style={styles.mainContent}>
         <Slot />
-        {showFAB && <FloatingActionButton onPress={() => {}} />}
+        {showFAB && <FloatingActionButton onPress={() => openNewTaskModal()} />}
       </View>
 
       {!isDesktop && (
@@ -33,6 +38,16 @@ function ResponsiveLayout() {
           onClose={() => setIsMobileMenuOpen(false)}
         />
       )}
+
+      <NewTaskModal
+        visible={isNewTaskModalOpen}
+        onClose={closeNewTaskModal}
+        onSaved={() => {
+          // TODO: refresh task list from Firestore (e.g. via an event bus or context)
+        }}
+        prefillDate={newTaskPrefillDate}
+        prefillHour={newTaskPrefillHour}
+      />
     </View>
   );
 }
