@@ -2,13 +2,15 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
 import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { TaskItem } from '@/components/WeeklyGrid';
+import { TaskItem, HoverableTaskCard, getPastEventStyle } from '@/components/WeeklyGrid';
+import { AnchorRect } from './ui/TimeDropdown';
 
 interface MonthlyGridViewProps {
   dates: Date[]; // Should be a flat array of 35 or 42 dates covering the month
   currentDate: Date;
   tasks: TaskItem[];
   onDayClick: (date: Date) => void;
+  onTaskClick?: (task: TaskItem, anchor: AnchorRect) => void;
 }
 
 const locale = Intl.DateTimeFormat().resolvedOptions().locale;
@@ -47,7 +49,7 @@ function formatHourLabel(startHour: number): string {
   return m > 0 ? `${displayH}:${String(m).padStart(2, '0')}${period}` : `${displayH}${period}`;
 }
 
-export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick }: MonthlyGridViewProps) {
+export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick, onTaskClick }: MonthlyGridViewProps) {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
 
@@ -133,25 +135,37 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick 
                     </View>
 
                     <View style={styles.eventsContainer}>
-                      {visibleTasks.map(task => (
-                        <View key={task.id} style={styles.eventRow}>
-                          <View style={[styles.eventDot, { backgroundColor: task.colorHex }]} />
-                          {task.isAllDay ? (
-                            <Text style={[styles.eventTitle, { color: isCurrentMonth ? theme.text : theme.textMuted }]} numberOfLines={1}>
-                              {task.title}
-                            </Text>
-                          ) : (
-                            <>
-                              <Text style={[styles.eventTime, { color: isCurrentMonth ? theme.textMuted : 'rgba(118,117,134,0.5)' }]} numberOfLines={1}>
-                                {formatHourLabel(task.startHour)}
-                              </Text>
-                              <Text style={[styles.eventTitle, { color: isCurrentMonth ? theme.text : theme.textMuted }]} numberOfLines={1}>
+                      {visibleTasks.map(task => {
+                        const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
+                        const pastDotStyle = getPastEventStyle(isPast, task.colorHex);
+                        
+                        return (
+                          <HoverableTaskCard 
+                            key={task.id} 
+                            task={task}
+                            style={styles.eventRow}
+                            onPress={(t, rect) => {
+                              onTaskClick?.(t, rect);
+                            }}
+                          >
+                            <View style={[styles.eventDot, pastDotStyle]} />
+                            {task.isAllDay ? (
+                              <Text style={[styles.eventTitle, { color: isCurrentMonth ? (isPast ? theme.textMuted : theme.text) : theme.textMuted }]} numberOfLines={1}>
                                 {task.title}
                               </Text>
-                            </>
-                          )}
-                        </View>
-                      ))}
+                            ) : (
+                              <>
+                                <Text style={[styles.eventTime, { color: isCurrentMonth ? (isPast ? 'rgba(118,117,134,0.5)' : theme.textMuted) : 'rgba(118,117,134,0.5)' }]} numberOfLines={1}>
+                                  {formatHourLabel(task.startHour)}
+                                </Text>
+                                <Text style={[styles.eventTitle, { color: isCurrentMonth ? (isPast ? theme.textMuted : theme.text) : theme.textMuted }]} numberOfLines={1}>
+                                  {task.title}
+                                </Text>
+                              </>
+                            )}
+                          </HoverableTaskCard>
+                        );
+                      })}
                       {overflowCount > 0 && (
                         <Text style={[styles.overflowText, { color: theme.textMuted }]}>
                           +{overflowCount} more

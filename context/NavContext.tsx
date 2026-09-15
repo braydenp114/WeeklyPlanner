@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { Task } from '@/services/tasksService';
 
 interface NavContextType {
   isMobileMenuOpen: boolean;
@@ -13,6 +14,8 @@ interface NavContextType {
   taskRefreshKey: number;
   /** Call after creating/updating/deleting a task to trigger grid refetch. */
   refreshTasks: () => void;
+  editTaskData: Task | null;
+  openEditTaskModal: (task: Task) => void;
 }
 
 const NavContext = createContext<NavContextType>({
@@ -24,6 +27,8 @@ const NavContext = createContext<NavContextType>({
   closeNewTaskModal: () => {},
   taskRefreshKey: 0,
   refreshTasks: () => {},
+  editTaskData: null,
+  openEditTaskModal: () => {},
 });
 
 export function NavProvider({ children, isDesktop }: { children: ReactNode; isDesktop: boolean }) {
@@ -32,10 +37,17 @@ export function NavProvider({ children, isDesktop }: { children: ReactNode; isDe
   const [newTaskPrefillDate, setNewTaskPrefillDate] = useState<Date | undefined>(undefined);
   const [newTaskPrefillHour, setNewTaskPrefillHour] = useState<number | undefined>(undefined);
   const [taskRefreshKey, setTaskRefreshKey] = useState(0);
+  const [editTaskData, setEditTaskData] = useState<Task | null>(null);
 
   const openNewTaskModal = (date?: Date, hour?: number) => {
+    setEditTaskData(null);
     setNewTaskPrefillDate(date);
     setNewTaskPrefillHour(hour);
+    setIsNewTaskModalOpen(true);
+  };
+
+  const openEditTaskModal = (task: Task) => {
+    setEditTaskData(task);
     setIsNewTaskModalOpen(true);
   };
 
@@ -52,6 +64,7 @@ export function NavProvider({ children, isDesktop }: { children: ReactNode; isDe
         isNewTaskModalOpen, openNewTaskModal, closeNewTaskModal,
         newTaskPrefillDate, newTaskPrefillHour,
         taskRefreshKey, refreshTasks,
+        editTaskData, openEditTaskModal,
       }}
     >
       {children}

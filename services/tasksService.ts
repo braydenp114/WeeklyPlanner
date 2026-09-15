@@ -9,8 +9,10 @@ import {
   getDocs,
   Timestamp,
   serverTimestamp,
+  writeBatch,
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
+import { generateOccurrenceDates, getRecurrenceEndBound, MAX_OCCURRENCES_PER_TASK } from '../utils/expandRecurrences';
 
 export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekday' | 'custom';
 export type BusyStatus = 'busy' | 'free';
@@ -44,6 +46,7 @@ export interface Task {
   notification: { type: string; minutesBefore: number } | null;
   ownerId: string;
   createdAt: Timestamp;
+  seriesId?: string;
 }
 
 export type CreateTaskData = Omit<Task, 'id' | 'ownerId' | 'createdAt'>;
@@ -59,14 +62,77 @@ export async function createTask(data: CreateTaskData): Promise<string> {
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error('User not authenticated');
 
-  const docData = {
+  const baseDocData = {
     ...data,
     ownerId: currentUser.uid,
     createdAt: serverTimestamp(),
   };
 
-  const docRef = await addDoc(collection(db, TASKS_COLLECTION), docData);
-  return docRef.id;
+  if (data.recurrence === 'none') {
+    const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
+    return docRef.id;
+  }
+
+  // Materialize recurring occurrences
+  const seriesId = doc(collection(db, TASKS_COLLECTION)).id;
+  
+  const taskStart = data.startDate.toDate();
+  const taskEnd = data.endDate.toDate();
+  const durationMs = taskEnd.getTime() - taskStart.getTime();
+
+  // Bounded generation: max 2 years forward for 'never' ends
+  const rangeEnd = new Date(taskStart.getTime() + 2 * 365 * 24 * 60 * 60 * 1000);
+  const recurrenceEndBound = getRecurrenceEndBound(data as Task, rangeEnd);
+  
+  const occurrenceDates = generateOccurrenceDates(
+    data.recurrence,
+    data.customRecurrenceRule,
+    taskStart,
+    recurrenceEndBound
+  );
+
+  const startHours = taskStart.getHours();
+  const startMinutes = taskStart.getMinutes();
+  const startSeconds = taskStart.getSeconds();
+
+  const batch = writeBatch(db);
+  let batchCount = 0;
+  let totalEmitted = 0;
+  const maxOccurrences = data.customRecurrenceRule?.endOccurrences ?? undefined;
+  
+  let firstDocId = '';
+
+  for (const occDate of occurrenceDates) {
+    if (totalEmitted >= MAX_OCCURRENCES_PER_TASK) break;
+    if (maxOccurrences !== undefined && totalEmitted >= maxOccurrences) break;
+
+    occDate.setHours(startHours, startMinutes, startSeconds, 0);
+    const occEnd = new Date(occDate.getTime() + durationMs);
+
+    const docRef = doc(collection(db, TASKS_COLLECTION));
+    if (totalEmitted === 0) firstDocId = docRef.id;
+
+    const occData = {
+      ...baseDocData,
+      seriesId, // Link them all to the same series
+      startDate: Timestamp.fromDate(occDate),
+      endDate: Timestamp.fromDate(occEnd),
+    };
+
+    batch.set(docRef, occData);
+    batchCount++;
+    totalEmitted++;
+  }
+
+  if (batchCount > 0) {
+    await batch.commit();
+  } else {
+    // Fallback if no occurrences generated for some reason
+    const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
+    return docRef.id;
+  }
+  
+  return firstDocId;
 }
 
 /**
@@ -166,4 +232,21 @@ export async function deleteTask(id: string): Promise<void> {
 
   const taskRef = doc(db, TASKS_COLLECTION, id);
   await deleteDoc(taskRef);
+}
+
+/**
+ * Retrieves a single task by ID.
+ */
+export async function getTaskById(id: string): Promise<Task | null> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const { getDoc } = await import('firebase/firestore');
+  const taskRef = doc(db, TASKS_COLLECTION, id);
+  const docSnap = await getDoc(taskRef);
+  
+  if (docSnap.exists() && docSnap.data().ownerId === currentUser.uid) {
+    return { id: docSnap.id, ...docSnap.data() } as Task;
+  }
+  return null;
 }
