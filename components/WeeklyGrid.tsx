@@ -663,15 +663,7 @@ export default function WeeklyGrid() {
                 </View>
               )}
 
-              {/* Empty State */}
-              {!tasksLoading && tasks.length === 0 && allDayTasks.length === 0 && !tasksError && (
-                <View style={styles.emptyState}>
-                  <MaterialIcons name="event-busy" size={32} color={theme.textMuted} />
-                  <Text style={[styles.emptyStateText, { color: theme.textMuted }]}>
-                    No events
-                  </Text>
-                </View>
-              )}
+
             </View>
           </ScrollView>
         </View>
@@ -1031,20 +1023,5 @@ const styles = StyleSheet.create({
     right: 8,
     zIndex: 20,
   },
-  // ── Empty State ──
-  emptyState: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptyStateText: {
-    fontFamily: Fonts.body,
-    fontSize: 14,
-    fontWeight: '500',
-  },
+
 });

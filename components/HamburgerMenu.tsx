@@ -22,7 +22,7 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, signOutUser } = useAuth();
 
   const slideAnim = useMemo(() => new Animated.Value(-300), []);
 
@@ -134,10 +134,8 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
                   activeOpacity={0.7}
                   onPress={() => {
                     if (user) {
-                      import('@/config/firebase').then(({ auth }) => {
-                        auth.signOut();
-                        onClose();
-                      });
+                      signOutUser();
+                      onClose();
                     } else {
                       onClose();
                       router.push('/login');

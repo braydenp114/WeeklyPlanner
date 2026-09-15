@@ -48,32 +48,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Configure native Google Sign-In on app start
     if (Platform.OS !== 'web' && GoogleSignin) {
-      GoogleSignin.configure({
-        webClientId: '304847390966-6f5far1pc5ogu692ga1qvrnasdq24bpd.apps.googleusercontent.com',
-      });
+      try {
+        GoogleSignin.configure({
+          webClientId: '304847390966-6f5far1pc5ogu692ga1qvrnasdq24bpd.apps.googleusercontent.com',
+        });
+      } catch (err: any) {
+        console.error('[AuthContext] GoogleSignin.configure ERROR:', err?.code, err?.message, err?.stack, err);
+      }
     }
 
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
+    console.log('[AuthContext] Subscribing to onAuthStateChanged with auth:', !!auth);
+    let unsubscribe: () => void = () => {};
+    try {
+      unsubscribe = onAuthStateChanged(
+        auth,
+        (currentUser) => {
+          console.log('[AuthContext] onAuthStateChanged updated user:', currentUser ? currentUser.uid : 'null');
+          setUser(currentUser);
+          setLoading(false);
+        },
+        (error: any) => {
+          console.error('[AuthContext] onAuthStateChanged error callback:', error?.code, error?.message, error?.stack, error);
+        }
+      );
+    } catch (err: any) {
+      console.error('[AuthContext] onAuthStateChanged thrown exception:', err?.code, err?.message, err?.stack, err);
+    }
 
     return () => unsubscribe();
   }, []);
 
   const signInWithEmail = async (email: string, pass: string) => {
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      throw new Error('Please enter a valid email address.');
+    }
+    if (!pass || typeof pass !== 'string' || !pass.trim()) {
+      throw new Error('Please enter a password.');
+    }
+    const cleanEmail = email.trim();
+    console.log('[AuthContext] Calling signInWithEmailAndPassword - email:', JSON.stringify(cleanEmail), 'passLength:', pass.length, 'authReady:', !!auth);
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, pass);
+      await signInWithEmailAndPassword(auth, cleanEmail, pass);
     } finally {
       setLoading(false);
     }
   };
 
   const signUpWithEmail = async (email: string, pass: string) => {
+    if (!email || typeof email !== 'string' || !email.trim()) {
+      throw new Error('Please enter a valid email address.');
+    }
+    if (!pass || typeof pass !== 'string' || !pass.trim()) {
+      throw new Error('Please enter a password.');
+    }
+    const cleanEmail = email.trim();
+    console.log('[AuthContext] Calling createUserWithEmailAndPassword - email:', JSON.stringify(cleanEmail), 'passLength:', pass.length, 'authReady:', !!auth);
     setLoading(true);
     try {
-      await createUserWithEmailAndPassword(auth, email, pass);
+      await createUserWithEmailAndPassword(auth, cleanEmail, pass);
     } finally {
       setLoading(false);
     }

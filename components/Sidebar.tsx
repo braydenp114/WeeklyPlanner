@@ -17,7 +17,7 @@ export function Sidebar() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, signOutUser } = useAuth();
   const { openNewTaskModal } = useNav();
 
   return (
@@ -98,9 +98,7 @@ export function Sidebar() {
               activeOpacity={0.7}
               onPress={() => {
                 if (user) {
-                  import('@/config/firebase').then(({ auth }) => {
-                    auth.signOut();
-                  });
+                  signOutUser();
                 } else {
                   router.push('/login');
                 }

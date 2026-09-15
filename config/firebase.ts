@@ -25,25 +25,32 @@ const firebaseConfig = {
   measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
+console.log('[firebase.ts] Initializing Firebase with config keys:', {
+  hasApiKey: !!firebaseConfig.apiKey,
+  hasAuthDomain: !!firebaseConfig.authDomain,
+  hasProjectId: !!firebaseConfig.projectId,
+  platform: Platform.OS,
+});
+
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Auth with platform-appropriate persistence
-// Web: explicit browserLocalPersistence so sessions survive full page reload
-// Native: AsyncStorage-backed persistence
+// Initialize Auth with platform-appropriate configuration
 let authInstance;
 try {
   if (Platform.OS === 'web') {
-    authInstance = initializeAuth(app, {
-      persistence: browserLocalPersistence,
-    });
+    // getAuth auto-includes the popup/redirect resolver on web
+    authInstance = getAuth(app);
+    console.log('[firebase.ts] getAuth (web) succeeded');
   } else {
+    // Native platforms require manual persistence config
     authInstance = initializeAuth(app, {
       persistence: getReactNativePersistence(AsyncStorage),
     });
+    console.log('[firebase.ts] initializeAuth (native) succeeded');
   }
-} catch (_err) {
-  // initializeAuth throws if already initialized — fall back to getAuth
+} catch (err: any) {
+  console.log('[firebase.ts] Auth initialization threw error (falling back to getAuth):', err?.code, err?.message, err);
   authInstance = getAuth(app);
 }
 

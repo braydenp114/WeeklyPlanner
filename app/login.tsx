@@ -44,36 +44,56 @@ export default function LoginScreen() {
   const handleSubmit = async () => {
     setErrorMessage(null);
 
-    if (!email || !password) {
+    const cleanEmail = (email || '').trim();
+    const cleanPassword = (password || '').trim();
+
+    if (!cleanEmail || !cleanPassword) {
       setErrorMessage('Please enter both email and password.');
       return;
     }
 
-    if (isSignUp && password !== confirmPassword) {
+    if (isSignUp && cleanPassword !== (confirmPassword || '').trim()) {
       setErrorMessage('Passwords do not match.');
       return;
     }
 
     setSubmitting(true);
+    console.log('[LoginScreen] handleSubmit called:', {
+      isSignUp,
+      email: JSON.stringify(cleanEmail),
+      passwordLength: cleanPassword.length,
+    });
+
     try {
       if (isSignUp) {
-        await signUpWithEmail(email, password);
+        await signUpWithEmail(cleanEmail, cleanPassword);
       } else {
-        await signInWithEmail(email, password);
+        await signInWithEmail(cleanEmail, cleanPassword);
       }
       router.replace('/(tabs)');
     } catch (err: any) {
+      console.error('[LoginScreen] Auth error caught:', err);
       const code = err?.code || '';
-      if (code === 'auth/invalid-email') {
+      const msg = err?.message || '';
+      if (code === 'auth/invalid-email' || msg.includes('invalid-email')) {
         setErrorMessage('Please enter a valid email address.');
-      } else if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+      } else if (
+        code === 'auth/user-not-found' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/invalid-credential' ||
+        msg.includes('invalid-credential') ||
+        msg.includes('user-not-found') ||
+        msg.includes('wrong-password')
+      ) {
         setErrorMessage('Invalid email or password.');
-      } else if (code === 'auth/email-already-in-use') {
+      } else if (code === 'auth/email-already-in-use' || msg.includes('email-already-in-use')) {
         setErrorMessage('An account with this email already exists.');
-      } else if (code === 'auth/weak-password') {
+      } else if (code === 'auth/weak-password' || msg.includes('weak-password')) {
         setErrorMessage('Password should be at least 6 characters.');
+      } else if (code === 'auth/argument-error' || msg.includes('argument-error')) {
+        setErrorMessage('Please enter a valid email and password.');
       } else {
-        setErrorMessage(err?.message || 'Authentication failed. Please try again.');
+        setErrorMessage(msg || 'Authentication failed. Please try again.');
       }
     } finally {
       setSubmitting(false);
@@ -87,8 +107,15 @@ export default function LoginScreen() {
       await signInWithGoogle();
       router.replace('/(tabs)');
     } catch (err: any) {
-      if (err?.code !== 'auth/popup-closed-by-user') {
-        setErrorMessage(err?.message || 'Google sign in failed.');
+      console.error('[LoginScreen] Google Auth error caught:', err);
+      const code = err?.code || '';
+      const msg = err?.message || '';
+      if (code !== 'auth/popup-closed-by-user' && !msg.includes('popup-closed-by-user')) {
+        if (code === 'auth/argument-error' || msg.includes('argument-error')) {
+          setErrorMessage('Google Sign-In failed due to invalid configuration.');
+        } else {
+          setErrorMessage(msg || 'Google sign in failed.');
+        }
       }
     } finally {
       setSubmitting(false);
@@ -105,16 +132,7 @@ export default function LoginScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header Branding */}
-          <View style={styles.headerBox}>
-            <View style={[styles.logoBadge, { backgroundColor: theme.primaryAction }]}>
-              <Text style={styles.logoBadgeText}>W</Text>
-            </View>
-            <Text style={[styles.appTitle, { color: theme.text }]}>FocusFlow Planner</Text>
-            <Text style={[styles.appSubtitle, { color: theme.textSecondary }]}>
-              Orbital Soft-Tech System
-            </Text>
-          </View>
+
 
           {/* Main Glassmorphic Auth Card */}
           <View
@@ -322,41 +340,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 40,
   },
-  headerBox: {
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  logoBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: RoundedGeometry.default, // 8px base radius
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-    shadowColor: '#6366F1',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  logoBadgeText: {
-    fontFamily: Fonts.headline,
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  appTitle: {
-    fontFamily: Fonts.headline,
-    fontSize: Typography.headlineLg.fontSize - 4,
-    fontWeight: Typography.headlineLg.fontWeight,
-    letterSpacing: -0.5,
-  },
-  appSubtitle: {
-    fontFamily: Fonts.mono,
-    fontSize: Typography.labelSm.fontSize,
-    marginTop: 4,
-    letterSpacing: 0.5,
-  },
+
   authCard: {
     width: '100%',
     maxWidth: 400,
