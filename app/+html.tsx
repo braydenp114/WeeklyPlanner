@@ -21,6 +21,63 @@ export default function Root({ children }: PropsWithChildren) {
           rel="stylesheet"
         />
 
+
+        {/* Custom scrollbar styles */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          /* Vertical scrollbar: auto-hide, show on hover/scroll */
+          [data-class="scrollbar-vertical"] {
+            scrollbar-width: thin;
+            scrollbar-color: transparent transparent;
+            transition: scrollbar-color 0.3s;
+          }
+          [data-class="scrollbar-vertical"]:hover,
+          [data-class="scrollbar-vertical"]:active {
+            scrollbar-color: rgba(128, 128, 128, 0.45) transparent;
+          }
+          [data-class="scrollbar-vertical"]::-webkit-scrollbar {
+            width: 8px;
+            background: transparent;
+          }
+          [data-class="scrollbar-vertical"]::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          [data-class="scrollbar-vertical"]::-webkit-scrollbar-thumb {
+            background: transparent;
+            border-radius: 9999px;
+            transition: background 0.3s;
+          }
+          [data-class="scrollbar-vertical"]:hover::-webkit-scrollbar-thumb,
+          [data-class="scrollbar-vertical"]:active::-webkit-scrollbar-thumb {
+            background: rgba(128, 128, 128, 0.45);
+          }
+
+          /* Horizontal scrollbar: always visible */
+          [data-class="scrollbar-horizontal"] {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(128, 128, 128, 0.45) transparent;
+          }
+          [data-class="scrollbar-horizontal"]::-webkit-scrollbar {
+            height: 8px;
+            background: transparent;
+          }
+          [data-class="scrollbar-horizontal"]::-webkit-scrollbar-track {
+            background: transparent;
+          }
+          [data-class="scrollbar-horizontal"]::-webkit-scrollbar-thumb {
+            background: rgba(128, 128, 128, 0.45);
+            border-radius: 9999px;
+          }
+          [data-class="scrollbar-horizontal"]::-webkit-scrollbar-thumb:hover {
+            background: rgba(128, 128, 128, 0.6);
+          }
+
+          /* Corner where both scrollbars meet */
+          [data-class="scrollbar-vertical"]::-webkit-scrollbar-corner,
+          [data-class="scrollbar-horizontal"]::-webkit-scrollbar-corner {
+            background: transparent;
+          }
+        `}} />
+
         {/* Reset styles for React Native Web */}
         <ScrollViewStyleReset />
       </head>
