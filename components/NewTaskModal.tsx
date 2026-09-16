@@ -126,6 +126,11 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
   const [locationCoordinates, setLocationCoordinates] = useState<LocationCoordinates | null>(null);
   const [notifications, setNotifications] = useState<{ type: string; minutesBefore: number }[]>([]);
   const [colorHex, setColorHex] = useState(COLOR_OPTIONS[0].hex);
+  const [category, setCategory] = useState<string>('study');
+  const [categoryOptions, setCategoryOptions] = useState<string[]>(['study', 'workout', 'work', 'personal']);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
+  const [customCategoryText, setCustomCategoryText] = useState('');
   const [busyStatus, setBusyStatus] = useState<BusyStatus>('busy');
   const [visibility, setVisibility] = useState<Visibility>('default');
   const [description, setDescription] = useState('');
@@ -277,6 +282,12 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
 
         setNotifications(editTaskData.notification ? [editTaskData.notification] : []);
         setColorHex(editTaskData.colorHex);
+        if (editTaskData.category) {
+          setCategory(editTaskData.category);
+          setCategoryOptions(prev => prev.includes(editTaskData.category!) ? prev : [...prev, editTaskData.category!]);
+        } else {
+          setCategory('study');
+        }
         setBusyStatus(editTaskData.busyStatus);
         setVisibility(editTaskData.visibility);
         setDescription(editTaskData.description || '');
@@ -303,6 +314,9 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
         setLocationCoordinates(null);
         setNotifications([]);
         setColorHex(COLOR_OPTIONS[0].hex);
+        setCategory('study');
+        setShowCustomCategoryInput(false);
+        setCustomCategoryText('');
         setBusyStatus('busy');
         setVisibility('default');
         setDescription('');
@@ -335,6 +349,17 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
     ];
   }, [startDate, recurrence, customRuleLabel]);
 
+  // ── Custom category handler ──
+  const confirmCustomCategory = useCallback(() => {
+    const trimmed = customCategoryText.trim();
+    if (!trimmed) return;
+    setCategoryOptions(prev => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+    setCategory(trimmed);
+    setCustomCategoryText('');
+    setShowCustomCategoryInput(false);
+    setCategoryPickerOpen(false);
+  }, [customCategoryText]);
+
   // ── Save handler ──
   const handleSave = useCallback(async () => {
     setError('');
@@ -364,6 +389,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
         visibility,
         description: description.trim() || null,
         colorHex,
+        category: category || null,
       };
 
       if (editTaskData && editTaskData.id) {
@@ -379,7 +405,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
     } finally {
       setSaving(false);
     }
-  }, [title, startDate, endDate, allDay, recurrence, customRecurrenceRule, location, locationCoordinates, notifications, busyStatus, visibility, description, colorHex, onSaved, onClose, editTaskData]);
+  }, [title, startDate, endDate, allDay, recurrence, customRecurrenceRule, location, locationCoordinates, notifications, busyStatus, visibility, description, colorHex, category, onSaved, onClose, editTaskData]);
 
   // ── Slide animation ──
   const slideAnim = useMemo(() => new Animated.Value(300), []);
@@ -613,6 +639,55 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
                           <Text style={[inlineStyles.dropItemText, { color: theme.text }]}>{c.name}</Text>
                         </TouchableOpacity>
                       ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Category picker */}
+              <View style={[styles.fieldSection, { zIndex: 9 }]}>
+                <View style={styles.fieldIcon}>
+                  <MaterialIcons name="label" size={20} color={theme.onSurfaceVariant} />
+                </View>
+                <View style={{ position: 'relative', flex: 1 }}>
+                  <TouchableOpacity
+                    style={[inlineStyles.dropBtn, { backgroundColor: theme.surfaceContainer, borderColor: theme.outlineVariant, flexDirection: 'row', alignItems: 'center', gap: 8 }]}
+                    onPress={() => setCategoryPickerOpen(!categoryPickerOpen)}
+                  >
+                    <Text style={[inlineStyles.dropLabel, { color: theme.text, flex: 1 }]}>{category}</Text>
+                    <MaterialIcons name="arrow-drop-down" size={18} color={theme.onSurfaceVariant} />
+                  </TouchableOpacity>
+                  {categoryPickerOpen && (
+                    <View style={[inlineStyles.dropMenu, { backgroundColor: theme.surfaceContainerHighest, borderColor: theme.outlineVariant }]}>
+                      {categoryOptions.map(opt => (
+                        <TouchableOpacity
+                          key={opt}
+                          style={inlineStyles.dropItem}
+                          onPress={() => { setCategory(opt); setCategoryPickerOpen(false); }}
+                        >
+                          <Text style={[inlineStyles.dropItemText, { color: theme.text }]}>{opt}</Text>
+                        </TouchableOpacity>
+                      ))}
+                      <TouchableOpacity
+                        style={inlineStyles.dropItem}
+                        onPress={() => setShowCustomCategoryInput(true)}
+                      >
+                        <Text style={[inlineStyles.dropItemText, { color: theme.primaryAction }]}>+ New category</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  {showCustomCategoryInput && (
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                      <TextInput
+                        style={[inlineStyles.dropBtn, { flex: 1, color: theme.text, borderColor: theme.outlineVariant }]}
+                        placeholder="New category name"
+                        placeholderTextColor={theme.textMuted}
+                        value={customCategoryText}
+                        onChangeText={setCustomCategoryText}
+                      />
+                      <TouchableOpacity onPress={confirmCustomCategory} style={[inlineStyles.dropBtn, { backgroundColor: theme.primaryAction }]}>
+                        <Text style={{ color: '#FFFFFF' }}>Add</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </View>

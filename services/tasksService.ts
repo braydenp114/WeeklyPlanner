@@ -35,6 +35,7 @@ export interface Task {
   latitude?: number | null;
   longitude?: number | null;
   colorHex: string;
+  category: string | null;
   busyStatus: BusyStatus;
   visibility: Visibility;
   startDate: Timestamp;
