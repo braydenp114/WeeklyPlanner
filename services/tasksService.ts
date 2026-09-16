@@ -28,6 +28,12 @@ export interface CustomRecurrenceRule {
   endOccurrences?: number;
 }
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 export interface Task {
   id?: string;
   title: string;
@@ -49,6 +55,12 @@ export interface Task {
   ownerId: string;
   createdAt: Timestamp;
   seriesId?: string;
+  /** Whether this task itself is marked as done. */
+  completed?: boolean;
+  /** Whether this task has an attached sub-item checklist. */
+  hasChecklist?: boolean;
+  /** Sub-items shown when hasChecklist is true. */
+  checklistItems?: ChecklistItem[];
 }
 
 export type CreateTaskData = Omit<Task, 'id' | 'ownerId' | 'createdAt'>;

@@ -14,6 +14,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
 import { TaskItem } from './WeeklyGrid';
 import { AnchorRect } from './ui/TimeDropdown';
+import { updateTask, ChecklistItem } from '@/services/tasksService';
 
 interface TaskPreviewPopoverProps {
   visible: boolean;
@@ -22,6 +23,8 @@ interface TaskPreviewPopoverProps {
   anchor: AnchorRect | null;
   onEdit: (task: TaskItem) => void;
   onDelete: (task: TaskItem) => void;
+  /** Called after the completion state (task or a checklist item) is persisted, so the grid can refetch. */
+  onChanged?: () => void;
 }
 
 const locale = Intl.DateTimeFormat().resolvedOptions().locale;
@@ -35,21 +38,49 @@ function formatTaskTime(task: TaskItem) {
   return `${dateFmt.format(start)} · ${timeFmt.format(start)} – ${timeFmt.format(end)}`;
 }
 
-export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onDelete }: TaskPreviewPopoverProps) {
+export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onDelete, onChanged }: TaskPreviewPopoverProps) {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [showFullDesc, setShowFullDesc] = useState(false);
+  const [completed, setCompleted] = useState(false);
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const { user } = useAuth();
 
   useEffect(() => {
     if (visible) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowFullDesc(false);
+      setCompleted(!!task?.originalTaskData.completed);
+      setChecklistItems(task?.originalTaskData.checklistItems || []);
     }
   }, [visible, task]);
 
   if (!visible || !task) return null;
+
+  const toggleCompleted = async () => {
+    const next = !completed;
+    setCompleted(next);
+    try {
+      await updateTask(task.originalTaskId, { completed: next });
+      onChanged?.();
+    } catch {
+      setCompleted(!next);
+    }
+  };
+
+  const toggleChecklistItem = async (id: string) => {
+    const next = checklistItems.map((item) =>
+      item.id === id ? { ...item, completed: !item.completed } : item
+    );
+    setChecklistItems(next);
+    try {
+      await updateTask(task.originalTaskId, { checklistItems: next });
+      onChanged?.();
+    } catch {
+      setChecklistItems(checklistItems);
+    }
+  };
 
   const POPOVER_WIDTH = Math.min(360, windowWidth - 32);
   const POPOVER_HEIGHT_ESTIMATE = 240; // rough estimate
@@ -123,8 +154,19 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
             </TouchableOpacity>
           </View>
 
-          {/* Header Row: Color Dot + Title */}
+          {/* Header Row: Checkbox + Color Dot + Title */}
           <View style={styles.headerRow}>
+            <TouchableOpacity
+              onPress={toggleCompleted}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={styles.checkboxBtn}
+            >
+              <MaterialIcons
+                name={completed ? 'check-box' : 'check-box-outline-blank'}
+                size={22}
+                color={completed ? theme.primaryAction : theme.onSurfaceVariant}
+              />
+            </TouchableOpacity>
             <View style={[styles.colorDot, { backgroundColor: task.colorHex }]} />
             <Text style={[styles.titleText, { color: theme.text }]}>{task.title}</Text>
           </View>
@@ -161,6 +203,30 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
                     <Text style={[styles.showMoreText, { color: theme.primaryAction }]}>Show more</Text>
                   </TouchableOpacity>
                 )}
+              </View>
+            </View>
+          )}
+
+          {/* Checklist */}
+          {tData.hasChecklist && checklistItems.length > 0 && (
+            <View style={styles.row}>
+              <MaterialIcons name="checklist" size={18} color={theme.onSurfaceVariant} style={styles.icon} />
+              <View style={{ flex: 1, gap: 8 }}>
+                {checklistItems.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={styles.checklistItemRow}
+                    onPress={() => toggleChecklistItem(item.id)}
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                  >
+                    <MaterialIcons
+                      name={item.completed ? 'check-box' : 'check-box-outline-blank'}
+                      size={18}
+                      color={item.completed ? theme.primaryAction : theme.onSurfaceVariant}
+                    />
+                    <Text style={[styles.detailText, { color: theme.text, flex: 1 }]}>{item.text}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
           )}
@@ -237,11 +303,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
+  checkboxBtn: {
+    marginTop: 2,
+  },
   colorDot: {
     width: 14,
     height: 14,
     borderRadius: 4,
     marginTop: 6,
+  },
+  checklistItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   titleText: {
     fontFamily: Fonts.headline,

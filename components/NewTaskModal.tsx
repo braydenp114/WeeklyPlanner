@@ -19,7 +19,7 @@ import { Colors, Fonts, RoundedGeometry, TaskCardColors } from '@/constants/them
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
 import { useNav } from '@/context/NavContext';
-import { createTask, updateTask, CreateTaskData, TaskRecurrence, BusyStatus, Visibility, CustomRecurrenceRule } from '@/services/tasksService';
+import { createTask, updateTask, CreateTaskData, TaskRecurrence, BusyStatus, Visibility, CustomRecurrenceRule, ChecklistItem } from '@/services/tasksService';
 import { CalendarPicker } from './ui/CalendarPicker';
 import { TimeDropdown, AnchorRect } from './ui/TimeDropdown';
 import { CustomRecurrenceModal } from './CustomRecurrenceModal';
@@ -134,8 +134,27 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
   const [busyStatus, setBusyStatus] = useState<BusyStatus>('busy');
   const [visibility, setVisibility] = useState<Visibility>('default');
   const [description, setDescription] = useState('');
+  const [hasChecklist, setHasChecklist] = useState(false);
+  const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  const [newChecklistItemText, setNewChecklistItemText] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const handleAddChecklistItem = useCallback(() => {
+    const text = newChecklistItemText.trim();
+    if (!text) return;
+    const id = `${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    setChecklistItems((prev) => [...prev, { id, text, completed: false }]);
+    setNewChecklistItemText('');
+  }, [newChecklistItemText]);
+
+  const handleRemoveChecklistItem = useCallback((id: string) => {
+    setChecklistItems((prev) => prev.filter((item) => item.id !== id));
+  }, []);
+
+  const handleChecklistItemTextChange = useCallback((id: string, text: string) => {
+    setChecklistItems((prev) => prev.map((item) => (item.id === id ? { ...item, text } : item)));
+  }, []);
 
   // ── Trigger element refs for anchored popovers ──
   const startDateBtnRef = useRef<View>(null);
@@ -291,7 +310,9 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
         setBusyStatus(editTaskData.busyStatus);
         setVisibility(editTaskData.visibility);
         setDescription(editTaskData.description || '');
-        
+        setHasChecklist(!!editTaskData.hasChecklist);
+        setChecklistItems(editTaskData.checklistItems || []);
+
       } else {
         // Default new task
         const now = prefillDate ? new Date(prefillDate) : new Date();
@@ -320,6 +341,8 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
         setBusyStatus('busy');
         setVisibility('default');
         setDescription('');
+        setHasChecklist(false);
+        setChecklistItems([]);
       }
 
       setStartDateAnchor(null);
@@ -330,6 +353,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
       setSaving(false);
       setColorPickerOpen(false);
       setNotifPickerOpen(false);
+      setNewChecklistItemText('');
     }
   }, [visible, prefillDate, prefillHour, editTaskData]);
 
@@ -373,6 +397,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
     }
     setSaving(true);
     try {
+      const trimmedChecklistItems = checklistItems.filter((item) => item.text.trim().length > 0);
       const taskData: CreateTaskData = {
         title: title.trim(),
         startDate: Timestamp.fromDate(startDate),
@@ -390,6 +415,9 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
         description: description.trim() || null,
         colorHex,
         category: category || null,
+        completed: editTaskData?.completed ?? false,
+        hasChecklist,
+        checklistItems: hasChecklist ? trimmedChecklistItems : [],
       };
 
       if (editTaskData && editTaskData.id) {
@@ -397,7 +425,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
       } else {
         await createTask(taskData);
       }
-      
+
       onSaved?.();
       onClose();
     } catch (e: any) {
@@ -405,7 +433,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
     } finally {
       setSaving(false);
     }
-  }, [title, startDate, endDate, allDay, recurrence, customRecurrenceRule, location, locationCoordinates, notifications, busyStatus, visibility, description, colorHex, category, onSaved, onClose, editTaskData]);
+  }, [title, startDate, endDate, allDay, recurrence, customRecurrenceRule, location, locationCoordinates, notifications, busyStatus, visibility, description, colorHex, category, hasChecklist, checklistItems, onSaved, onClose, editTaskData]);
 
   // ── Slide animation ──
   const slideAnim = useMemo(() => new Animated.Value(300), []);
@@ -774,6 +802,60 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
                 />
               </View>
 
+              {/* Checklist */}
+              <View style={[styles.fieldSection, { flexDirection: 'column', alignItems: 'stretch' }]}>
+                <View style={styles.checklistToggleRow}>
+                  <View style={styles.fieldIcon}>
+                    <MaterialIcons name="checklist" size={20} color={theme.onSurfaceVariant} />
+                  </View>
+                  <Text style={[styles.fieldLabel, { color: theme.text, flex: 1 }]}>Checklist</Text>
+                  <Switch
+                    value={hasChecklist}
+                    onValueChange={setHasChecklist}
+                    trackColor={{ false: theme.outlineVariant, true: theme.primaryAction }}
+                    thumbColor={'#FFFFFF'}
+                  />
+                </View>
+
+                {hasChecklist && (
+                  <View style={styles.checklistItemsWrap}>
+                    {checklistItems.map((item) => (
+                      <View key={item.id} style={styles.checklistItemRow}>
+                        <MaterialIcons name="radio-button-unchecked" size={16} color={theme.onSurfaceVariant} />
+                        <TextInput
+                          style={[styles.checklistItemInput, { color: theme.text, borderBottomColor: theme.outlineVariant }]}
+                          value={item.text}
+                          onChangeText={(text) => handleChecklistItemTextChange(item.id, text)}
+                          placeholder="Checklist item"
+                          placeholderTextColor={theme.textMuted}
+                        />
+                        <TouchableOpacity
+                          onPress={() => handleRemoveChecklistItem(item.id)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <MaterialIcons name="close" size={16} color={theme.error} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+
+                    <View style={styles.checklistAddRow}>
+                      <TextInput
+                        style={[styles.checklistItemInput, { color: theme.text, borderBottomColor: theme.outlineVariant }]}
+                        value={newChecklistItemText}
+                        onChangeText={setNewChecklistItemText}
+                        placeholder="Add item"
+                        placeholderTextColor={theme.textMuted}
+                        onSubmitEditing={handleAddChecklistItem}
+                        returnKeyType="done"
+                      />
+                      <TouchableOpacity onPress={handleAddChecklistItem} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <MaterialIcons name="add" size={20} color={theme.primaryAction} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </View>
+
               {/* Bottom spacer for scroll comfort */}
               <View style={{ height: 24 }} />
             </ScrollView>
@@ -1004,6 +1086,33 @@ const styles = StyleSheet.create({
     borderRadius: RoundedGeometry.default,
     padding: 12,
     minHeight: 100,
+  },
+  checklistToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  checklistItemsWrap: {
+    marginTop: 10,
+    marginLeft: 36,
+    gap: 8,
+  },
+  checklistItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  checklistAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  checklistItemInput: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: 14,
+    borderBottomWidth: 1,
+    paddingVertical: 6,
   },
 });
 
