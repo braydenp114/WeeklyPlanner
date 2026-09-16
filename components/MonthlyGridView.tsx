@@ -179,6 +179,15 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
           ))}
         </View>
       </ScrollView>
+
+      {tasks.length === 0 && (
+        <View style={styles.emptyStateOverlay} pointerEvents="box-none">
+          <TouchableOpacity style={styles.emptyStateContent} onPress={() => onDayClick(currentDate)}>
+            <Text style={[styles.emptyStateText, { color: theme.text }]}>No tasks yet</Text>
+            <Text style={[styles.emptyStateSubtext, { color: theme.primaryAction }]}>Tap a day to add one</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -273,5 +282,32 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '600',
     marginTop: 2,
+  },
+  emptyStateOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  emptyStateContent: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderRadius: RoundedGeometry.default,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+  },
+  emptyStateText: {
+    fontFamily: Fonts.body,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyStateSubtext: {
+    fontFamily: Fonts.body,
+    fontSize: 14,
+    marginTop: 4,
   },
 });
