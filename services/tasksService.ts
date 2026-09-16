@@ -239,6 +239,58 @@ export async function updateTask(id: string, data: UpdateTaskData): Promise<void
 }
 
 /**
+ * Updates all occurrences in a series with new shared data and shifts the dates relative to timeDeltaMs.
+ */
+export async function updateSeries(seriesId: string, data: UpdateTaskData, timeDeltaMs: number, durationMs: number | null = null): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('seriesId', '==', seriesId)
+  );
+
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return;
+
+  const chunks: any[][] = [];
+  let currentChunk: any[] = [];
+  snapshot.docs.forEach((d) => {
+    currentChunk.push(d);
+    if (currentChunk.length === 490) {
+      chunks.push(currentChunk);
+      currentChunk = [];
+    }
+  });
+  if (currentChunk.length > 0) chunks.push(currentChunk);
+
+  // Exclude date fields from raw data since we are dynamically shifting them per-occurrence
+  const { startDate, endDate, ...sharedData } = data;
+
+  for (const chunk of chunks) {
+    const batch = writeBatch(db);
+    for (const docSnap of chunk) {
+      const taskData = docSnap.data();
+      const origStart = taskData.startDate.toDate();
+      const origEnd = taskData.endDate.toDate();
+
+      const newStart = new Date(origStart.getTime() + timeDeltaMs);
+      const newEnd = durationMs !== null 
+        ? new Date(newStart.getTime() + durationMs)
+        : new Date(origEnd.getTime() + timeDeltaMs);
+
+      batch.update(docSnap.ref, {
+        ...sharedData,
+        startDate: Timestamp.fromDate(newStart),
+        endDate: Timestamp.fromDate(newEnd),
+      });
+    }
+    await batch.commit();
+  }
+}
+
+/**
  * Deletes a task.
  */
 export async function deleteTask(id: string): Promise<void> {
@@ -247,6 +299,44 @@ export async function deleteTask(id: string): Promise<void> {
 
   const taskRef = doc(db, TASKS_COLLECTION, id);
   await deleteDoc(taskRef);
+}
+
+/**
+ * Deletes all tasks in a series.
+ */
+export async function deleteSeries(seriesId: string): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('seriesId', '==', seriesId)
+  );
+  
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return;
+
+  // Firestore batch limit is 500, but our series cap is 366, so one batch is usually enough.
+  // Still, we'll chunk it just to be perfectly safe.
+  const chunks: any[][] = [];
+  let currentChunk: any[] = [];
+  snapshot.docs.forEach((d) => {
+    currentChunk.push(d.ref);
+    if (currentChunk.length === 490) {
+      chunks.push(currentChunk);
+      currentChunk = [];
+    }
+  });
+  if (currentChunk.length > 0) chunks.push(currentChunk);
+
+  for (const chunk of chunks) {
+    const batch = writeBatch(db);
+    for (const ref of chunk) {
+      batch.delete(ref);
+    }
+    await batch.commit();
+  }
 }
 
 /**

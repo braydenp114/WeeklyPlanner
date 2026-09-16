@@ -19,7 +19,7 @@ import { Colors, Fonts, RoundedGeometry, TaskCardColors } from '@/constants/them
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
 import { useNav } from '@/context/NavContext';
-import { createTask, updateTask, CreateTaskData, TaskRecurrence, BusyStatus, Visibility, CustomRecurrenceRule, ChecklistItem } from '@/services/tasksService';
+import { createTask, updateTask, updateSeries, CreateTaskData, TaskRecurrence, BusyStatus, Visibility, CustomRecurrenceRule, ChecklistItem } from '@/services/tasksService';
 import { CalendarPicker } from './ui/CalendarPicker';
 import { TimeDropdown, AnchorRect } from './ui/TimeDropdown';
 import { CustomRecurrenceModal } from './CustomRecurrenceModal';
@@ -112,7 +112,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const { user } = useAuth();
-  const { editTaskData } = useNav();
+  const { editTaskData, editTaskScope } = useNav();
 
   // ── Form state ──
   const [title, setTitle] = useState('');
@@ -421,7 +421,19 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
       };
 
       if (editTaskData && editTaskData.id) {
-        await updateTask(editTaskData.id, taskData);
+        if (editTaskScope === 'all' && editTaskData.seriesId) {
+          const origStartMs = editTaskData.startDate.toDate().getTime();
+          
+          const newStartMs = startDate.getTime();
+          const newEndMs = endDate.getTime();
+          
+          const timeDeltaMs = newStartMs - origStartMs;
+          const durationMs = newEndMs - newStartMs;
+          
+          await updateSeries(editTaskData.seriesId, taskData, timeDeltaMs, durationMs);
+        } else {
+          await updateTask(editTaskData.id, taskData);
+        }
       } else {
         await createTask(taskData);
       }
@@ -433,7 +445,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
     } finally {
       setSaving(false);
     }
-  }, [title, startDate, endDate, allDay, recurrence, customRecurrenceRule, location, locationCoordinates, notifications, busyStatus, visibility, description, colorHex, category, hasChecklist, checklistItems, onSaved, onClose, editTaskData]);
+  }, [title, startDate, endDate, allDay, recurrence, customRecurrenceRule, location, locationCoordinates, notifications, busyStatus, visibility, description, colorHex, category, hasChecklist, checklistItems, onSaved, onClose, editTaskData, editTaskScope]);
 
   // ── Slide animation ──
   const slideAnim = useMemo(() => new Animated.Value(300), []);

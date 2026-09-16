@@ -12,10 +12,10 @@ interface NavContextType {
   newTaskPrefillHour?: number;
   /** Incrementing key that signals WeeklyGrid to refetch tasks from Firestore. */
   taskRefreshKey: number;
-  /** Call after creating/updating/deleting a task to trigger grid refetch. */
   refreshTasks: () => void;
   editTaskData: Task | null;
-  openEditTaskModal: (task: Task) => void;
+  editTaskScope: 'this' | 'all';
+  openEditTaskModal: (task: Task, scope?: 'this' | 'all') => void;
 }
 
 const NavContext = createContext<NavContextType>({
@@ -28,6 +28,7 @@ const NavContext = createContext<NavContextType>({
   taskRefreshKey: 0,
   refreshTasks: () => {},
   editTaskData: null,
+  editTaskScope: 'this',
   openEditTaskModal: () => {},
 });
 
@@ -38,6 +39,7 @@ export function NavProvider({ children, isDesktop }: { children: ReactNode; isDe
   const [newTaskPrefillHour, setNewTaskPrefillHour] = useState<number | undefined>(undefined);
   const [taskRefreshKey, setTaskRefreshKey] = useState(0);
   const [editTaskData, setEditTaskData] = useState<Task | null>(null);
+  const [editTaskScope, setEditTaskScope] = useState<'this' | 'all'>('this');
 
   const openNewTaskModal = (date?: Date, hour?: number) => {
     setEditTaskData(null);
@@ -46,8 +48,9 @@ export function NavProvider({ children, isDesktop }: { children: ReactNode; isDe
     setIsNewTaskModalOpen(true);
   };
 
-  const openEditTaskModal = (task: Task) => {
+  const openEditTaskModal = (task: Task, scope: 'this' | 'all' = 'this') => {
     setEditTaskData(task);
+    setEditTaskScope(scope);
     setIsNewTaskModalOpen(true);
   };
 
@@ -59,12 +62,20 @@ export function NavProvider({ children, isDesktop }: { children: ReactNode; isDe
 
   return (
     <NavContext.Provider 
-      value={{ 
-        isMobileMenuOpen, setIsMobileMenuOpen, isDesktop,
-        isNewTaskModalOpen, openNewTaskModal, closeNewTaskModal,
-        newTaskPrefillDate, newTaskPrefillHour,
-        taskRefreshKey, refreshTasks,
-        editTaskData, openEditTaskModal,
+      value={{
+        isMobileMenuOpen,
+        setIsMobileMenuOpen,
+        isDesktop,
+        isNewTaskModalOpen,
+        openNewTaskModal,
+        closeNewTaskModal,
+        newTaskPrefillDate,
+        newTaskPrefillHour,
+        taskRefreshKey,
+        refreshTasks,
+        editTaskData,
+        editTaskScope,
+        openEditTaskModal,
       }}
     >
       {children}
