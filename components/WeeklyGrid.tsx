@@ -23,9 +23,10 @@ import {
 } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MonthlyGridView from './MonthlyGridView';
-import { getTasksForRange, Task, deleteTask } from '@/services/tasksService';
+import { getTasksForRange, Task, deleteTask, deleteSeries } from '@/services/tasksService';
 import { AnchorRect } from './ui/TimeDropdown';
 import { ConfirmDialog } from './ConfirmDialog';
+import { RecurringActionDialog, RecurringActionScope } from './RecurringActionDialog';
 import { TaskPreviewPopover } from './TaskPreviewPopover';
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
@@ -317,16 +318,31 @@ export default function WeeklyGrid() {
 
   const { openEditTaskModal, refreshTasks } = useNav();
 
+  const [actionTask, setActionTask] = useState<TaskItem | null>(null);
+  const [actionMode, setActionMode] = useState<'edit' | 'delete'>('edit');
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
   const handleEditTask = useCallback((task: TaskItem) => {
     setSelectedTask(null);
-    openEditTaskModal(task.originalTaskData);
+    if (task.isRecurrenceInstance) {
+      setActionTask(task);
+      setActionMode('edit');
+    } else {
+      openEditTaskModal(task.originalTaskData, 'this');
+    }
   }, [openEditTaskModal]);
 
   const [deleteConfirmTask, setDeleteConfirmTask] = useState<TaskItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteTask = useCallback((task: TaskItem) => {
-    setDeleteConfirmTask(task);
+    setSelectedTask(null);
+    if (task.isRecurrenceInstance) {
+      setActionTask(task);
+      setActionMode('delete');
+    } else {
+      setDeleteConfirmTask(task);
+    }
   }, []);
 
   const confirmDelete = async () => {
@@ -339,6 +355,30 @@ export default function WeeklyGrid() {
     } finally {
       setIsDeleting(false);
       setDeleteConfirmTask(null);
+    }
+  };
+
+  const handleActionConfirm = async (scope: RecurringActionScope) => {
+    if (!actionTask) return;
+
+    if (actionMode === 'edit') {
+      openEditTaskModal(actionTask.originalTaskData, scope);
+      setActionTask(null);
+    } else if (actionMode === 'delete') {
+      setIsActionLoading(true);
+      try {
+        if (scope === 'this') {
+          await deleteTask(actionTask.originalTaskId);
+        } else {
+          await deleteSeries(actionTask.originalTaskData.seriesId!);
+        }
+        refreshTasks();
+        setActionTask(null);
+      } catch (e: any) {
+        setTasksError(e.message || 'Failed to delete task');
+      } finally {
+        setIsActionLoading(false);
+      }
     }
   };
 
@@ -854,6 +894,14 @@ export default function WeeklyGrid() {
         isLoading={isDeleting}
         onConfirm={confirmDelete}
         onClose={() => setDeleteConfirmTask(null)}
+      />
+
+      <RecurringActionDialog
+        visible={!!actionTask}
+        mode={actionMode}
+        isLoading={isActionLoading}
+        onConfirm={handleActionConfirm}
+        onClose={() => setActionTask(null)}
       />
     </View>
   );
