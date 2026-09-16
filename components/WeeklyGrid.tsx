@@ -688,9 +688,21 @@ export default function WeeklyGrid() {
                               ]}
                               onPress={handleTaskClick}
                             >
-                              <Text style={[styles.allDayChipText, isPast && { color: 'rgba(255,255,255,0.85)' }]} numberOfLines={1}>
-                                {task.title}
-                              </Text>
+                              <View style={styles.allDayChipRow}>
+                                {task.originalTaskData.completed && (
+                                  <MaterialIcons name="check-circle" size={11} color="#FFFFFF" />
+                                )}
+                                <Text
+                                  style={[
+                                    styles.allDayChipText,
+                                    isPast && { color: 'rgba(255,255,255,0.85)' },
+                                    task.originalTaskData.completed && styles.completedStrike,
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {task.title}
+                                </Text>
+                              </View>
                             </HoverableTaskCard>
                           );
                         })}
@@ -798,14 +810,26 @@ export default function WeeklyGrid() {
                             onPress={handleTaskClick}
                           >
                             <View style={styles.taskCardHeader}>
-                              <Text style={[styles.taskTagText, isPast && { opacity: 0.8 }]}>{task.tag}</Text>
+                              <View style={styles.taskCardHeaderLeft}>
+                                {task.originalTaskData.completed && (
+                                  <MaterialIcons name="check-circle" size={12} color="#FFFFFF" />
+                                )}
+                                <Text style={[styles.taskTagText, isPast && { opacity: 0.8 }]}>{task.tag}</Text>
+                              </View>
                               <Text style={[styles.taskTimeText, isPast && { color: 'rgba(255,255,255,0.7)' }]}>
                                 {String(Math.floor(task.startHour)).padStart(2, '0')}:
                                 {String(Math.round((task.startHour % 1) * 60)).padStart(2, '0')}
                               </Text>
                             </View>
 
-                            <Text style={[styles.taskTitleText, isPast && { color: 'rgba(255,255,255,0.85)' }]} numberOfLines={2}>
+                            <Text
+                              style={[
+                                styles.taskTitleText,
+                                isPast && { color: 'rgba(255,255,255,0.85)' },
+                                task.originalTaskData.completed && styles.completedStrike,
+                              ]}
+                              numberOfLines={2}
+                            >
                               {task.title}
                             </Text>
 
@@ -842,6 +866,7 @@ export default function WeeklyGrid() {
         anchor={popoverAnchor}
         onEdit={handleEditTask}
         onDelete={handleDeleteTask}
+        onChanged={refreshTasks}
       />
       
       <ConfirmDialog
@@ -1062,6 +1087,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  taskCardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  completedStrike: {
+    textDecorationLine: 'line-through',
+  },
   taskTagText: {
     fontFamily: Fonts.mono,
     fontSize: 9,
@@ -1170,6 +1203,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 4,
     paddingVertical: 2,
+  },
+  allDayChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   allDayChipText: {
     fontFamily: Fonts.mono,

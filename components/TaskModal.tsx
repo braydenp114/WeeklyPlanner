@@ -59,8 +59,7 @@ export function TaskModal() {
             <View
               style={[
                 styles.card,
-                { backgroundColor: theme.glassBackground, borderColor: theme.glassBorder },
-                Glassmorphism,
+                { backgroundColor: theme.glassBackground, borderColor: theme.glassBorder, ...Glassmorphism },
               ]}
             >
               {selectedTask ? (
