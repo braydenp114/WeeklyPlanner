@@ -1,11 +1,10 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, Dimensions, TouchableWithoutFeedback, Image } from 'react-native';
+import React, { useEffect, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, TouchableWithoutFeedback, Image } from 'react-native';
 import { usePathname, router } from 'expo-router';
 import { NavIcon, NavIconName } from './NavIcon';
 import { Colors, Typography, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
-import { useMemo } from 'react';
 
 const NAV_ITEMS = [
   { name: 'Weekly Grid', icon: 'gridview', route: '/' },
@@ -22,7 +21,7 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, signOutUser } = useAuth();
 
   const slideAnim = useMemo(() => new Animated.Value(-300), []);
 
@@ -130,14 +129,12 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
                 <Text style={[styles.profileName, Typography.bodySm, { color: theme.text }]} numberOfLines={1}>
                   {user?.email || 'Guest'}
                 </Text>
-                <TouchableOpacity 
+                <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={() => {
                     if (user) {
-                      import('@/config/firebase').then(({ auth }) => {
-                        auth.signOut();
-                        onClose();
-                      });
+                      signOutUser();
+                      onClose();
                     } else {
                       onClose();
                       router.push('/login');

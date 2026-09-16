@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Dimensions, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Image } from 'react-native';
 import { usePathname, router } from 'expo-router';
 import { NavIcon, NavIconName } from './NavIcon';
 import { Colors, Typography, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
+import { useNav } from '@/context/NavContext';
 
 const NAV_ITEMS = [
   { name: 'Weekly Grid', icon: 'gridview', route: '/' },
@@ -16,7 +17,8 @@ export function Sidebar() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const pathname = usePathname();
-  const { user } = useAuth();
+  const { user, signOutUser } = useAuth();
+  const { openNewTaskModal } = useNav();
 
   return (
     <View style={[styles.container, { backgroundColor: theme.glassBackground, borderRightColor: theme.glassBorder }]}>
@@ -25,6 +27,7 @@ export function Sidebar() {
         <TouchableOpacity 
           style={[styles.newTaskButton, { backgroundColor: theme.primaryAction, borderRadius: RoundedGeometry.full }]}
           activeOpacity={0.8}
+          onPress={() => openNewTaskModal()}
         >
           <NavIcon name="add" size={12} color="#FFFFFF" />
           <Text style={[styles.newTaskText, Typography.labelMd, { color: '#FFFFFF' }]}>New Task</Text>
@@ -95,9 +98,7 @@ export function Sidebar() {
               activeOpacity={0.7}
               onPress={() => {
                 if (user) {
-                  import('@/config/firebase').then(({ auth }) => {
-                    auth.signOut();
-                  });
+                  signOutUser();
                 } else {
                   router.push('/login');
                 }
