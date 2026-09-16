@@ -1,4 +1,4 @@
-import type { TaskItem } from '@/context/TaskContext';
+import type { TaskItem } from '@/components/WeeklyGrid';
 
 export interface WeeklyGoal {
   id: string;

@@ -1,24 +1,22 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-  Modal,
-  TextInput,
-  Pressable,
-  PanResponder,
 } from 'react-native';
+import { router } from 'expo-router';
 
+import { useAuth } from '@/context/AuthContext';
 import { useNav } from '@/context/NavContext';
-import { useTasks } from '@/context/TaskContext';
 import { NavIcon } from '@/components/NavIcon';
 import {
   Colors,
   Fonts,
   Glassmorphism,
   RoundedGeometry,
+  TaskCardColors,
   Typography,
 } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -30,6 +28,10 @@ const locale = Intl.DateTimeFormat().resolvedOptions().locale;
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
 const dayFormatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
 const dayNumFormatter = new Intl.DateTimeFormat(locale, { day: 'numeric' });
+const monthDayFormatter = new Intl.DateTimeFormat(locale, {
+  month: 'short',
+  day: 'numeric',
+});
 const monthYearFormatter = new Intl.DateTimeFormat(locale, {
   month: 'long',
   year: 'numeric',
@@ -69,139 +71,58 @@ function getWeekDates(offsetWeeks = 0) {
   });
 }
 
-function GridCell({
-  dayIndex,
-  hour,
-  borderColor,
-  onLongPressComplete,
-}: {
+export type TaskItem = {
+  id: string;
+  title: string;
   dayIndex: number;
-  hour: number;
-  borderColor: string;
-  onLongPressComplete: (dayIndex: number, hour: number, durationHours: number) => void;
-}) {
-  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isLongPressing = useRef(false);
-  const startY = useRef(0);
+  startHour: number;
+  durationHours: number;
+  colorHex: string;
+  tag: string;
+};
 
-  const panResponder = useMemo(
-    () =>
-      // eslint-disable-next-line react-hooks/refs -- PanResponder handlers only run as event callbacks, never during render
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onPanResponderGrant: (evt) => {
-          isLongPressing.current = false;
-          startY.current = evt.nativeEvent.pageY;
-          pressTimer.current = setTimeout(() => {
-            isLongPressing.current = true;
-          }, 350);
-        },
-        onPanResponderRelease: (evt) => {
-          if (pressTimer.current) clearTimeout(pressTimer.current);
-          if (isLongPressing.current) {
-            const dy = evt.nativeEvent.pageY - startY.current;
-            const extraHours = Math.max(0, Math.round(dy / rowHeight));
-            onLongPressComplete(dayIndex, hour, 1 + extraHours);
-          }
-        },
-        onPanResponderTerminate: () => {
-          if (pressTimer.current) clearTimeout(pressTimer.current);
-        },
-      }),
-    [dayIndex, hour, onLongPressComplete]
-  );
-
-  return <View {...panResponder.panHandlers} style={[styles.hourCell, { borderColor }]} />;
-}
+const initialSampleTasks: TaskItem[] = [];
 
 export default function WeeklyGrid() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
+  const { user, signOutUser } = useAuth();
   const { isDesktop, setIsMobileMenuOpen } = useNav();
-  const { tasks, addTask, updateTask } = useTasks();
-  const [selectedTagFilter] = useState<string | null>(null);
-
-  const [addModalVisible, setAddModalVisible] = useState(false);
-  const [pendingDayIndex, setPendingDayIndex] = useState<number | null>(null);
-  const [newTitle, setNewTitle] = useState('');
-  const [newTag, setNewTag] = useState('study');
-  const [tagOptions, setTagOptions] = useState(['study', 'workout', 'work', 'personal']);
-  const [showCustomTagInput, setShowCustomTagInput] = useState(false);
-  const [customTagText, setCustomTagText] = useState('');
-  const [newStartHour, setNewStartHour] = useState(9);
-  const [newDurationMinutes, setNewDurationMinutes] = useState(60);
-  const [taskMode, setTaskMode] = useState<'new' | 'existing'>('new');
-  const [selectedExistingTaskId, setSelectedExistingTaskId] = useState<string | null>(null);
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string | null>(null);
 
   const [currentDate, setCurrentDate] = useState(new Date());
+
   const [weekOffset, setWeekOffset] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => setCurrentDate(new Date()), 60000);
+    const timer = setInterval(() => {
+      setCurrentDate(new Date());
+    }, 60000);
     return () => clearInterval(timer);
   }, []);
-
   const weekDates = getWeekDates(weekOffset);
   const firstDay = weekDates[0];
+  const lastDay = weekDates[6];
 
   const filteredTasks = selectedTagFilter
-    ? tasks.filter((t) => t.colorHex === selectedTagFilter)
-    : tasks;
+    ? initialSampleTasks.filter((t) => t.colorHex === selectedTagFilter)
+    : initialSampleTasks;
 
-  const unscheduledTasks = tasks.filter((t) => t.dayIndex === undefined);
-
-  const openAddModal = (dayIndex: number, hour: number, duration: number) => {
-    setPendingDayIndex(dayIndex);
-    setNewTitle('');
-    setNewTag('study');
-    setShowCustomTagInput(false);
-    setCustomTagText('');
-    setNewStartHour(hour);
-    setNewDurationMinutes(Math.max(15, Math.round((duration * 60) / 15) * 15));
-    setTaskMode('new');
-    setSelectedExistingTaskId(null);
-    setAddModalVisible(true);
-  };
-
-  const confirmCustomTag = () => {
-    if (!customTagText) return;
-    setTagOptions((prev) => [...prev, customTagText]);
-    setNewTag(customTagText);
-    setCustomTagText('');
-    setShowCustomTagInput(false);
-  };
-
-  const confirmAddTask = () => {
-    if (pendingDayIndex === null) return;
-    const duration = newDurationMinutes / 60;
-
-    if (taskMode === 'existing') {
-      if (!selectedExistingTaskId) return;
-      updateTask(selectedExistingTaskId, {
-        dayIndex: pendingDayIndex,
-        startHour: newStartHour,
-        durationHours: duration,
-      });
-    } else {
-      if (!newTitle) return;
-      addTask({
-        title: newTitle,
-        dayIndex: pendingDayIndex,
-        startHour: newStartHour,
-        durationHours: duration,
-        colorHex: '#4A90D9',
-        tag: newTag,
-      });
-    }
-    setAddModalVisible(false);
+  const handleSignOut = async () => {
+    await signOutUser();
+    router.replace('/login');
   };
 
   return (
     <View style={[styles.wrapper, { backgroundColor: theme.background }]}>
+      {/* Top Glass Navigation Bar */}
       <View
         style={[
           styles.topBar,
-          { backgroundColor: theme.glassBackground, borderColor: theme.glassBorder },
+          {
+            backgroundColor: theme.glassBackground,
+            borderColor: theme.glassBorder,
+          },
         ]}
       >
         <View style={styles.navGroup}>
@@ -225,7 +146,7 @@ export default function WeeklyGrid() {
 
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => setWeekOffset((prev) => prev - 1)}
+            onPress={() => setWeekOffset(prev => prev - 1)}
             style={[styles.arrowButton, { backgroundColor: theme.surfaceContainer }]}
           >
             <Text style={[styles.arrowText, { color: theme.text }]}>‹</Text>
@@ -237,7 +158,7 @@ export default function WeeklyGrid() {
 
           <TouchableOpacity
             activeOpacity={0.7}
-            onPress={() => setWeekOffset((prev) => prev + 1)}
+            onPress={() => setWeekOffset(prev => prev + 1)}
             style={[styles.arrowButton, { backgroundColor: theme.surfaceContainer }]}
           >
             <Text style={[styles.arrowText, { color: theme.text }]}>›</Text>
@@ -248,7 +169,10 @@ export default function WeeklyGrid() {
           <View
             style={[
               styles.timePill,
-              { backgroundColor: theme.surfaceContainerHigh, borderColor: theme.outlineVariant },
+              {
+                backgroundColor: theme.surfaceContainerHigh,
+                borderColor: theme.outlineVariant,
+              },
             ]}
           >
             <View style={[styles.liveDot, { backgroundColor: theme.primaryAction }]} />
@@ -256,33 +180,50 @@ export default function WeeklyGrid() {
               {timeFormatter.format(currentDate)} • {timeZone}
             </Text>
           </View>
+
         </View>
       </View>
 
+
+      {/* Days Header Row */}
       <View
         style={[
           styles.headerRowContainer,
-          { backgroundColor: theme.surfaceContainerLow, borderColor: theme.outlineVariant },
+          {
+            backgroundColor: theme.surfaceContainerLow,
+            borderColor: theme.outlineVariant,
+          },
         ]}
       >
         <View style={[styles.timeColumnHeaderSpacer, { borderColor: theme.outlineVariant }]} />
+
         <View style={styles.dayHeaderRow}>
-          {weekDates.map((date) => {
-            const isTodayDate = date.toDateString() === currentDate.toDateString();
+          {weekDates.map((date, idx) => {
+            const isToday = date.toDateString() === currentDate.toDateString();
             return (
               <View
                 key={date.toISOString()}
                 style={[
                   styles.dayHeaderCell,
                   { borderColor: theme.outlineVariant },
-                  isTodayDate && { backgroundColor: theme.surfaceContainerHighest },
+                  isToday && { backgroundColor: theme.surfaceContainerHighest },
                 ]}
               >
                 <Text style={[styles.dayHeaderName, { color: theme.textSecondary }]}>
                   {dayFormatter.format(date).toUpperCase()}
                 </Text>
-                <View style={[styles.dayNumberBadge, isTodayDate && { backgroundColor: theme.primaryAction }]}>
-                  <Text style={[styles.dayHeaderNumber, { color: isTodayDate ? '#FFFFFF' : theme.text }]}>
+                <View
+                  style={[
+                    styles.dayNumberBadge,
+                    isToday && { backgroundColor: theme.primaryAction },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dayHeaderNumber,
+                      { color: isToday ? '#FFFFFF' : theme.text },
+                    ]}
+                  >
                     {dayNumFormatter.format(date)}
                   </Text>
                 </View>
@@ -292,14 +233,22 @@ export default function WeeklyGrid() {
         </View>
       </View>
 
+      {/* Scrollable Hourly Timeline */}
       <ScrollView
         style={[styles.timelineScroll, { backgroundColor: theme.background }]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.timelineContent}
       >
         <View style={styles.gridBody}>
+          {/* Time Labels Column */}
           <View
-            style={[styles.timeColumn, { backgroundColor: theme.surfaceContainerLow, borderColor: theme.outlineVariant }]}
+            style={[
+              styles.timeColumn,
+              {
+                backgroundColor: theme.surfaceContainerLow,
+                borderColor: theme.outlineVariant,
+              },
+            ]}
           >
             {hours.map((hour) => (
               <View key={hour} style={styles.timeSlot}>
@@ -310,19 +259,21 @@ export default function WeeklyGrid() {
             ))}
           </View>
 
+          {/* Days Grid Columns with Task Overlay */}
           <View style={styles.daysRow}>
             {weekDates.map((date, dayIdx) => (
-              <View key={`${date.toISOString()}-column`} style={[styles.dayColumn, { borderColor: theme.outlineVariant }]}>
+              <View
+                key={`${date.toISOString()}-column`}
+                style={[styles.dayColumn, { borderColor: theme.outlineVariant }]}
+              >
                 {hours.map((hour) => (
-                  <GridCell
+                  <View
                     key={`${date.toISOString()}-${hour}`}
-                    dayIndex={dayIdx}
-                    hour={hour}
-                    borderColor={theme.outlineVariant}
-                    onLongPressComplete={openAddModal}
+                    style={[styles.hourCell, { borderColor: theme.outlineVariant }]}
                   />
                 ))}
 
+                {/* Render Current Time Line if Today */}
                 {isToday(date) && (
                   <View
                     style={[
@@ -335,10 +286,12 @@ export default function WeeklyGrid() {
                   />
                 )}
 
+
+                {/* Render Task Cards belonging to this day */}
                 {filteredTasks
                   .filter((task) => task.dayIndex === dayIdx)
                   .map((task) => {
-                    const topOffset = (task.startHour ?? 0) * rowHeight;
+                    const topOffset = task.startHour * rowHeight;
                     const cardHeight = task.durationHours * rowHeight - 6;
 
                     return (
@@ -361,6 +314,7 @@ export default function WeeklyGrid() {
                             {String(task.startHour).padStart(2, '0')}:00
                           </Text>
                         </View>
+
                         <Text style={styles.taskTitleText} numberOfLines={2}>
                           {task.title}
                         </Text>
@@ -372,171 +326,45 @@ export default function WeeklyGrid() {
           </View>
         </View>
       </ScrollView>
-
-      <Modal
-        visible={addModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setAddModalVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setAddModalVisible(false)}>
-          <Pressable style={[styles.modalContent, { backgroundColor: theme.background }]} onPress={() => {}}>
-            <View style={styles.modalHeaderRow}>
-              <TouchableOpacity onPress={() => setAddModalVisible(false)} style={styles.backButton}>
-                <Text style={[styles.backButtonText, { color: theme.primaryAction }]}>‹ Cancel</Text>
-              </TouchableOpacity>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>Schedule task</Text>
-              <View style={styles.backButtonSpacer} />
-            </View>
-
-            <View style={styles.modeRow}>
-              <TouchableOpacity
-                onPress={() => setTaskMode('new')}
-                style={[
-                  styles.modeChip,
-                  { borderColor: theme.outlineVariant },
-                  taskMode === 'new' && { backgroundColor: theme.primaryAction },
-                ]}
-              >
-                <Text style={{ color: taskMode === 'new' ? '#FFFFFF' : theme.text }}>New task</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setTaskMode('existing')}
-                style={[
-                  styles.modeChip,
-                  { borderColor: theme.outlineVariant },
-                  taskMode === 'existing' && { backgroundColor: theme.primaryAction },
-                ]}
-              >
-                <Text style={{ color: taskMode === 'existing' ? '#FFFFFF' : theme.text }}>Existing task</Text>
-              </TouchableOpacity>
-            </View>
-
-            {taskMode === 'new' ? (
-              <>
-                <TextInput
-                  style={[styles.modalInput, { color: theme.text, borderColor: theme.outlineVariant }]}
-                  placeholder="Task title"
-                  placeholderTextColor={theme.textMuted}
-                  value={newTitle}
-                  onChangeText={setNewTitle}
-                />
-
-                <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>Category</Text>
-                <View style={styles.tagRow}>
-                  {tagOptions.map((option) => (
-                    <TouchableOpacity
-                      key={option}
-                      onPress={() => setNewTag(option)}
-                      style={[
-                        styles.tagChip,
-                        { borderColor: theme.outlineVariant },
-                        newTag === option && { backgroundColor: theme.primaryAction },
-                      ]}
-                    >
-                      <Text style={{ color: newTag === option ? '#FFFFFF' : theme.text }}>{option}</Text>
-                    </TouchableOpacity>
-                  ))}
-                  <TouchableOpacity
-                    onPress={() => setShowCustomTagInput(true)}
-                    style={[styles.tagChip, { borderColor: theme.outlineVariant }]}
-                  >
-                    <Text style={{ color: theme.text }}>+</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {showCustomTagInput && (
-                  <View style={styles.customTagRow}>
-                    <TextInput
-                      style={[styles.modalInput, { flex: 1, color: theme.text, borderColor: theme.outlineVariant }]}
-                      placeholder="New category"
-                      placeholderTextColor={theme.textMuted}
-                      value={customTagText}
-                      onChangeText={setCustomTagText}
-                    />
-                    <TouchableOpacity onPress={confirmCustomTag} style={styles.smallConfirmButton}>
-                      <Text style={{ color: '#FFFFFF' }}>Add</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </>
-            ) : (
-              <View style={styles.existingList}>
-                {unscheduledTasks.length === 0 ? (
-                  <Text style={{ color: theme.textMuted }}>No unscheduled tasks to assign.</Text>
-                ) : (
-                  unscheduledTasks.map((t) => (
-                    <TouchableOpacity
-                      key={t.id}
-                      onPress={() => setSelectedExistingTaskId(t.id)}
-                      style={[
-                        styles.existingRow,
-                        { borderColor: theme.outlineVariant },
-                        selectedExistingTaskId === t.id && { backgroundColor: theme.primaryAction },
-                      ]}
-                    >
-                      <Text style={{ color: selectedExistingTaskId === t.id ? '#FFFFFF' : theme.text }}>
-                        {t.title} ({t.tag})
-                      </Text>
-                    </TouchableOpacity>
-                  ))
-                )}
-              </View>
-            )}
-
-            <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>Start hour</Text>
-            <TextInput
-              style={[styles.modalInput, { color: theme.text, borderColor: theme.outlineVariant }]}
-              keyboardType="numeric"
-              value={String(newStartHour)}
-              onChangeText={(text) => setNewStartHour(Number(text) || 0)}
-            />
-
-            <Text style={[styles.modalLabel, { color: theme.textSecondary }]}>Duration</Text>
-            <View style={styles.durationRow}>
-              <TouchableOpacity
-                onPress={() => setNewDurationMinutes((m) => Math.max(15, m - 15))}
-                style={[styles.stepperButton, { borderColor: theme.outlineVariant }]}
-              >
-                <Text style={[styles.stepperButtonText, { color: theme.text }]}>−</Text>
-              </TouchableOpacity>
-              <Text style={[styles.durationText, { color: theme.text }]}>
-                {Math.floor(newDurationMinutes / 60)}h {newDurationMinutes % 60}m
-              </Text>
-              <TouchableOpacity
-                onPress={() => setNewDurationMinutes((m) => m + 15)}
-                style={[styles.stepperButton, { borderColor: theme.outlineVariant }]}
-              >
-                <Text style={[styles.stepperButtonText, { color: theme.text }]}>+</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity onPress={confirmAddTask} style={[styles.confirmButton, { backgroundColor: theme.primaryAction }]}>
-              <Text style={styles.confirmButtonText}>Confirm</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: { flex: 1, paddingHorizontal: 12, paddingTop: 8 },
+  wrapper: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: RoundedGeometry.default,
+    borderRadius: RoundedGeometry.default, // 8px base radius
     borderWidth: 1,
     marginBottom: 8,
     ...Glassmorphism,
   },
-  navGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  arrowButton: { width: 28, height: 28, borderRadius: RoundedGeometry.sm, alignItems: 'center', justifyContent: 'center' },
-  arrowText: { fontFamily: Fonts.mono, fontSize: 18, fontWeight: '600', lineHeight: 20 },
+  navGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  arrowButton: {
+    width: 28,
+    height: 28,
+    borderRadius: RoundedGeometry.sm, // 4px
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowText: {
+    fontFamily: Fonts.mono,
+    fontSize: 18,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
   todayButton: {
     paddingHorizontal: 12,
     paddingVertical: 4,
@@ -546,41 +374,174 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 4,
   },
-  todayText: { fontFamily: Fonts.mono, fontSize: 12, fontWeight: '600' },
-  dateLabel: { fontFamily: Fonts.headline, fontSize: Typography.headlineMobile.fontSize, fontWeight: '600' },
+  todayText: {
+    fontFamily: Fonts.mono,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dateLabel: {
+    fontFamily: Fonts.headline,
+    fontSize: Typography.headlineMobile.fontSize,
+    fontWeight: '600',
+  },
   timePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: RoundedGeometry.full,
+    borderRadius: RoundedGeometry.full, // 9999px pill
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3 },
-  timePillText: { fontFamily: Fonts.mono, fontSize: Typography.labelSm.fontSize, fontWeight: '500' },
-  rightHeaderGroup: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  headerRowContainer: { flexDirection: 'row', borderWidth: 1, borderRadius: RoundedGeometry.default, overflow: 'hidden' },
-  timeColumnHeaderSpacer: { width: 54, borderRightWidth: 1 },
-  dayHeaderRow: { flex: 1, flexDirection: 'row' },
-  dayHeaderCell: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 8, borderRightWidth: 1 },
-  dayHeaderName: { fontFamily: Fonts.mono, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
-  dayNumberBadge: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  dayHeaderNumber: { fontFamily: Fonts.headline, fontSize: 22, fontWeight: '700' },
-  timelineScroll: { flex: 1, marginTop: 4 },
-  timelineContent: { paddingBottom: 24 },
-  gridBody: { flexDirection: 'row', minHeight: 24 * rowHeight },
-  timeColumn: { width: 54, borderRightWidth: 1 },
-  timeSlot: { height: rowHeight, justifyContent: 'center', alignItems: 'center' },
-  timeLabelText: { fontFamily: Fonts.mono, fontSize: Typography.labelSm.fontSize },
-  daysRow: { flex: 1, flexDirection: 'row', position: 'relative' },
-  dayColumn: { flex: 1, borderRightWidth: 1, position: 'relative' },
-  hourCell: { height: rowHeight, borderBottomWidth: 1 },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  timePillText: {
+    fontFamily: Fonts.mono,
+    fontSize: Typography.labelSm.fontSize,
+    fontWeight: '500',
+  },
+  rightHeaderGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  authPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: RoundedGeometry.full, // 9999px pill
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+  },
+  userEmailText: {
+    fontFamily: Fonts.mono,
+    fontSize: Typography.labelSm.fontSize,
+    maxWidth: 120,
+  },
+  signOutText: {
+    fontFamily: Fonts.mono,
+    fontSize: Typography.labelSm.fontSize,
+    fontWeight: '600',
+  },
+  paletteFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+    paddingHorizontal: 4,
+  },
+  paletteLabel: {
+    fontFamily: Fonts.mono,
+    fontSize: Typography.labelSm.fontSize,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  paletteChip: {
+    borderRadius: RoundedGeometry.default, // 8px base radius
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginRight: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paletteChipText: {
+    fontFamily: Fonts.mono,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  paletteChipTextWhite: {
+    fontFamily: Fonts.mono,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  headerRowContainer: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: RoundedGeometry.default, // 8px base radius
+    overflow: 'hidden',
+  },
+  timeColumnHeaderSpacer: {
+    width: 54,
+    borderRightWidth: 1,
+  },
+  dayHeaderRow: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  dayHeaderCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    borderRightWidth: 1,
+  },
+  dayHeaderName: {
+    fontFamily: Fonts.mono,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  dayNumberBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  dayHeaderNumber: {
+    fontFamily: Fonts.headline,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  timelineScroll: {
+    flex: 1,
+    marginTop: 4,
+  },
+  timelineContent: {
+    paddingBottom: 24,
+  },
+  gridBody: {
+    flexDirection: 'row',
+    minHeight: 24 * rowHeight,
+  },
+  timeColumn: {
+    width: 54,
+    borderRightWidth: 1,
+  },
+  timeSlot: {
+    height: rowHeight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timeLabelText: {
+    fontFamily: Fonts.mono,
+    fontSize: Typography.labelSm.fontSize,
+  },
+  daysRow: {
+    flex: 1,
+    flexDirection: 'row',
+    position: 'relative',
+  },
+  dayColumn: {
+    flex: 1,
+    borderRightWidth: 1,
+    position: 'relative',
+  },
+  hourCell: {
+    height: rowHeight,
+    borderBottomWidth: 1,
+  },
   taskCard: {
     position: 'absolute',
     left: 3,
     right: 3,
-    borderRadius: RoundedGeometry.default,
+    borderRadius: RoundedGeometry.default, // 8px rounded rectangle
     padding: 6,
     borderWidth: 1,
     shadowColor: '#000',
@@ -590,7 +551,11 @@ const styles = StyleSheet.create({
     elevation: 3,
     justifyContent: 'space-between',
   },
-  taskCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  taskCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   taskTagText: {
     fontFamily: Fonts.mono,
     fontSize: 9,
@@ -603,30 +568,24 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
   },
-  taskTimeText: { fontFamily: Fonts.mono, fontSize: 10, fontWeight: '500', color: 'rgba(255, 255, 255, 0.9)' },
-  taskTitleText: { fontFamily: Fonts.body, fontSize: Typography.bodySm.fontSize, fontWeight: '600', color: '#FFFFFF', marginTop: 4 },
-  currentTimeLine: { position: 'absolute', left: 0, right: 0, height: 2, zIndex: 10 },
-  modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
-  modalContent: { borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16 },
-  modalHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  backButton: { minWidth: 60 },
-  backButtonText: { fontSize: 16, fontWeight: '600' },
-  backButtonSpacer: { minWidth: 60 },
-  modalTitle: { fontSize: 16, fontWeight: '700' },
-  modalLabel: { fontSize: 12, fontWeight: '600', marginTop: 8, marginBottom: 4 },
-  modalInput: { borderWidth: 1, borderRadius: 8, padding: 8 },
-  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  tagChip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
-  customTagRow: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' },
-  smallConfirmButton: { backgroundColor: '#333', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-  modeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  modeChip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 },
-  existingList: { gap: 8, marginBottom: 8 },
-  existingRow: { borderWidth: 1, borderRadius: 8, padding: 10 },
-  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  stepperButton: { width: 36, height: 36, borderRadius: 18, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  stepperButtonText: { fontSize: 20, fontWeight: '600' },
-  durationText: { fontSize: 16, fontWeight: '600', minWidth: 70, textAlign: 'center' },
-  confirmButton: { marginTop: 16, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  confirmButtonText: { color: '#FFFFFF', fontWeight: '600' },
+  taskTimeText: {
+    fontFamily: Fonts.mono,
+    fontSize: 10,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.9)',
+  },
+  taskTitleText: {
+    fontFamily: Fonts.body,
+    fontSize: Typography.bodySm.fontSize,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginTop: 4,
+  },
+  currentTimeLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 2,
+    zIndex: 10,
+  },
 });
