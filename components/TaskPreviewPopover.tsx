@@ -15,6 +15,7 @@ import { useAuth } from '@/context/AuthContext';
 import { TaskItem } from './WeeklyGrid';
 import { AnchorRect } from './ui/TimeDropdown';
 import { updateTask, ChecklistItem } from '@/services/tasksService';
+import { getWeatherForTask, WeatherResult } from '@/services/weatherService';
 
 interface TaskPreviewPopoverProps {
   visible: boolean;
@@ -45,6 +46,7 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
   const [showFullDesc, setShowFullDesc] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
+  const [weather, setWeather] = useState<WeatherResult | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -53,6 +55,24 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
       setShowFullDesc(false);
       setCompleted(!!task?.originalTaskData.completed);
       setChecklistItems(task?.originalTaskData.checklistItems || []);
+      setWeather(null);
+
+      const tData = task?.originalTaskData;
+      const isPast = tData ? tData.endDate.toDate().getTime() < Date.now() : true;
+      if (tData?.latitude != null && tData?.longitude != null && !isPast) {
+        let cancelled = false;
+        getWeatherForTask({
+          latitude: tData.latitude,
+          longitude: tData.longitude,
+          date: tData.startDate.toDate(),
+          allDay: tData.allDay,
+        }).then((result) => {
+          if (!cancelled) setWeather(result);
+        });
+        return () => {
+          cancelled = true;
+        };
+      }
     }
   }, [visible, task]);
 
@@ -184,6 +204,18 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
             <View style={styles.row}>
               <MaterialIcons name="location-on" size={18} color={theme.onSurfaceVariant} style={styles.icon} />
               <Text style={[styles.detailText, { color: theme.text }]}>{tData.location}</Text>
+            </View>
+          )}
+
+          {/* Weather */}
+          {weather && (
+            <View style={styles.row}>
+              <MaterialIcons name={weather.condition.icon as any} size={18} color={theme.onSurfaceVariant} style={styles.icon} />
+              <Text style={[styles.detailText, { color: theme.text }]}>
+                {weather.kind === 'hourly'
+                  ? `${weather.temperature}°C · ${weather.condition.label}`
+                  : `${weather.temperatureMin}°–${weather.temperatureMax}°C · ${weather.condition.label}`}
+              </Text>
             </View>
           )}
 
