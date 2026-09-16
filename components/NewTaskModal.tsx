@@ -275,7 +275,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
         setAllDay(editTaskData.allDay);
         setRecurrence(editTaskData.recurrence);
         setCustomRecurrenceRule(editTaskData.customRecurrenceRule);
-        
+
         let customLbl = '';
         if (editTaskData.recurrence === 'custom' && editTaskData.customRecurrenceRule) {
           const rule = editTaskData.customRecurrenceRule;
@@ -323,7 +323,7 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
         }
         const endDefault = new Date(now);
         endDefault.setHours(endDefault.getHours() + 1);
-        
+
         setTitle('');
         setStartDate(now);
         setEndDate(endDefault);
@@ -423,13 +423,13 @@ export default function NewTaskModal({ visible, onClose, onSaved, prefillDate, p
       if (editTaskData && editTaskData.id) {
         if (editTaskScope === 'all' && editTaskData.seriesId) {
           const origStartMs = editTaskData.startDate.toDate().getTime();
-          
+
           const newStartMs = startDate.getTime();
           const newEndMs = endDate.getTime();
-          
+
           const timeDeltaMs = newStartMs - origStartMs;
           const durationMs = newEndMs - newStartMs;
-          
+
           await updateSeries(editTaskData.seriesId, taskData, timeDeltaMs, durationMs);
         } else {
           await updateTask(editTaskData.id, taskData);
