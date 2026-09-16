@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { generateOccurrenceDates, getRecurrenceEndBound, MAX_OCCURRENCES_PER_TASK } from '../utils/expandRecurrences';
+import { scheduleReminder } from '../hooks/use-task-reminders';
 
 export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekday' | 'custom';
 export type BusyStatus = 'busy' | 'free';
@@ -70,6 +71,7 @@ export async function createTask(data: CreateTaskData): Promise<string> {
 
   if (data.recurrence === 'none') {
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
+    await scheduleReminder(data);
     return docRef.id;
   }
 
