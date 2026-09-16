@@ -1,5 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
-import type { TaskItem } from '@/components/WeeklyGrid';
+import type { TaskItem } from '@/context/TaskContext';
 import { WeeklyGoal, remainingHours } from '@/utils/weekly-goal';
 
 interface Props {
