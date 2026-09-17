@@ -67,6 +67,12 @@ export interface Task {
   deadlineWarningHours?: number | null;
   /** If set, this regular task counts as "allocated time" toward the given deadline task's ID. */
   linkedDeadlineId?: string | null;
+  /** What actually happened for this task, logged after its time block passed. */
+  actualStatus?: 'as_planned' | 'different' | null;
+  /** If actualStatus is 'different', what the user did instead. */
+  substitutedActivity?: string | null;
+  /** Optional diary-style note about how the task went. */
+  actualNote?: string | null;
 }
 
 export type CreateTaskData = Omit<Task, 'id' | 'ownerId' | 'createdAt'>;
@@ -438,4 +444,25 @@ export async function getUnallocatedDeadlines(): Promise<UnallocatedDeadline[]> 
   }
 
   return results;
+}
+export interface LogActualParams {
+  status: 'as_planned' | 'different';
+  substitutedActivity?: string | null;
+  note?: string | null;
+}
+
+/**
+ * Logs what actually happened for a task, after its scheduled block has passed.
+ */
+export async function logTaskActual(id: string, params: LogActualParams): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const taskRef = doc(db, TASKS_COLLECTION, id);
+  await updateDoc(taskRef, {
+    actualStatus: params.status,
+    substitutedActivity: params.status === 'different' ? (params.substitutedActivity?.trim() || null) : null,
+    actualNote: params.note?.trim() || null,
+    completed: params.status === 'as_planned' ? true : false,
+  });
 }

@@ -1,21 +1,26 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   StyleSheet,
   useWindowDimensions,
-} from 'react-native';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { Colors, Fonts, RoundedGeometry, Typography } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAuth } from '@/context/AuthContext';
-import { TaskItem } from './WeeklyGrid';
-import { AnchorRect } from './ui/TimeDropdown';
-import { updateTask, ChecklistItem } from '@/services/tasksService';
-import { getWeatherForTask, WeatherResult } from '@/services/weatherService';
+} from "react-native";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { Colors, Fonts, RoundedGeometry, Typography } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useAuth } from "@/context/AuthContext";
+import { TaskItem } from "./WeeklyGrid";
+import { AnchorRect } from "./ui/TimeDropdown";
+import {
+  updateTask,
+  logTaskActual,
+  ChecklistItem,
+} from "@/services/tasksService";
+import { getWeatherForTask, WeatherResult } from "@/services/weatherService";
 
 interface TaskPreviewPopoverProps {
   visible: boolean;
@@ -29,26 +34,44 @@ interface TaskPreviewPopoverProps {
 }
 
 const locale = Intl.DateTimeFormat().resolvedOptions().locale;
-const dateFmt = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' });
-const timeFmt = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+const dateFmt = new Intl.DateTimeFormat(locale, {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+});
+const timeFmt = new Intl.DateTimeFormat(locale, {
+  hour: "numeric",
+  minute: "2-digit",
+});
 
 function formatTaskTime(task: TaskItem) {
-  if (task.isAllDay) return 'All day';
+  if (task.isAllDay) return "All day";
   const start = task.originalTaskData.startDate.toDate();
   const end = task.originalTaskData.endDate.toDate();
   return `${dateFmt.format(start)} · ${timeFmt.format(start)} – ${timeFmt.format(end)}`;
 }
 
-export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onDelete, onChanged }: TaskPreviewPopoverProps) {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+export function TaskPreviewPopover({
+  visible,
+  onClose,
+  task,
+  anchor,
+  onEdit,
+  onDelete,
+  onChanged,
+}: TaskPreviewPopoverProps) {
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[scheme];
+  const { user } = useAuth();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [showFullDesc, setShowFullDesc] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [checklistItems, setChecklistItems] = useState<ChecklistItem[]>([]);
   const [weather, setWeather] = useState<WeatherResult | null>(null);
-  const { user } = useAuth();
-
+  const [showLogActual, setShowLogActual] = useState(false);
+  const [substitutedText, setSubstitutedText] = useState("");
+  const [actualNoteText, setActualNoteText] = useState("");
+  const [savingActual, setSavingActual] = useState(false);
   useEffect(() => {
     if (visible) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -58,7 +81,9 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
       setWeather(null);
 
       const tData = task?.originalTaskData;
-      const isPast = tData ? tData.endDate.toDate().getTime() < Date.now() : true;
+      const isPast = tData
+        ? tData.endDate.toDate().getTime() < Date.now()
+        : true;
       if (tData?.latitude != null && tData?.longitude != null && !isPast) {
         let cancelled = false;
         getWeatherForTask({
@@ -89,9 +114,41 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
     }
   };
 
+  const handleLogAsPlanned = async () => {
+    setSavingActual(true);
+    try {
+      await logTaskActual(task.originalTaskId, { status: "as_planned" });
+      setCompleted(true);
+      setShowLogActual(false);
+      onChanged?.();
+    } catch {
+      // silently ignore for now
+    } finally {
+      setSavingActual(false);
+    }
+  };
+
+  const handleLogDifferent = async () => {
+    setSavingActual(true);
+    try {
+      await logTaskActual(task.originalTaskId, {
+        status: "different",
+        substitutedActivity: substitutedText,
+        note: actualNoteText,
+      });
+      setCompleted(false);
+      setShowLogActual(false);
+      onChanged?.();
+    } catch {
+      // silently ignore for now
+    } finally {
+      setSavingActual(false);
+    }
+  };
+
   const toggleChecklistItem = async (id: string) => {
     const next = checklistItems.map((item) =>
-      item.id === id ? { ...item, completed: !item.completed } : item
+      item.id === id ? { ...item, completed: !item.completed } : item,
     );
     setChecklistItems(next);
     try {
@@ -117,10 +174,10 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
     } else {
       top = Math.max(8, anchor.y - POPOVER_HEIGHT_ESTIMATE - 4);
     }
-    
+
     // Prevent clipping top/bottom roughly
     if (top + POPOVER_HEIGHT_ESTIMATE > windowHeight - 8) {
-        top = Math.max(8, windowHeight - POPOVER_HEIGHT_ESTIMATE - 8);
+      top = Math.max(8, windowHeight - POPOVER_HEIGHT_ESTIMATE - 8);
     }
 
     let left = anchor.x;
@@ -135,7 +192,7 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
     }
 
     popoverPlacementStyle = {
-      position: 'absolute' as const,
+      position: "absolute" as const,
       top,
       left,
       width: POPOVER_WIDTH,
@@ -143,10 +200,15 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
   }
 
   const tData = task.originalTaskData;
-  const ownerName = user?.displayName || user?.email || 'Signed-in User';
+  const ownerName = user?.displayName || user?.email || "Signed-in User";
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
       <View style={styles.overlay}>
         <TouchableWithoutFeedback onPress={onClose}>
           <View style={styles.scrim} />
@@ -155,7 +217,10 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
         <View
           style={[
             styles.popover,
-            { backgroundColor: theme.surfaceContainerHighest, borderColor: theme.outlineVariant },
+            {
+              backgroundColor: theme.surfaceContainerHighest,
+              borderColor: theme.outlineVariant,
+            },
             popoverPlacementStyle,
             !anchor && styles.centeredFallback,
           ]}
@@ -163,14 +228,32 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
           {/* Action Row */}
           <View style={styles.actionRow}>
             <View style={{ flex: 1 }} />
-            <TouchableOpacity onPress={() => onEdit(task)} style={styles.iconBtn}>
-              <MaterialIcons name="edit" size={20} color={theme.onSurfaceVariant} />
+            <TouchableOpacity
+              onPress={() => onEdit(task)}
+              style={styles.iconBtn}
+            >
+              <MaterialIcons
+                name="edit"
+                size={20}
+                color={theme.onSurfaceVariant}
+              />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => onDelete(task)} style={styles.iconBtn}>
-              <MaterialIcons name="delete" size={20} color={theme.onSurfaceVariant} />
+            <TouchableOpacity
+              onPress={() => onDelete(task)}
+              style={styles.iconBtn}
+            >
+              <MaterialIcons
+                name="delete"
+                size={20}
+                color={theme.onSurfaceVariant}
+              />
             </TouchableOpacity>
             <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
-              <MaterialIcons name="close" size={20} color={theme.onSurfaceVariant} />
+              <MaterialIcons
+                name="close"
+                size={20}
+                color={theme.onSurfaceVariant}
+              />
             </TouchableOpacity>
           </View>
 
@@ -182,13 +265,17 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
               style={styles.checkboxBtn}
             >
               <MaterialIcons
-                name={completed ? 'check-box' : 'check-box-outline-blank'}
+                name={completed ? "check-box" : "check-box-outline-blank"}
                 size={22}
                 color={completed ? theme.primaryAction : theme.onSurfaceVariant}
               />
             </TouchableOpacity>
-            <View style={[styles.colorDot, { backgroundColor: task.colorHex }]} />
-            <Text style={[styles.titleText, { color: theme.text }]}>{task.title}</Text>
+            <View
+              style={[styles.colorDot, { backgroundColor: task.colorHex }]}
+            />
+            <Text style={[styles.titleText, { color: theme.text }]}>
+              {task.title}
+            </Text>
           </View>
 
           {/* Time/Date */}
@@ -202,17 +289,29 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
           {/* Location */}
           {tData.location && (
             <View style={styles.row}>
-              <MaterialIcons name="location-on" size={18} color={theme.onSurfaceVariant} style={styles.icon} />
-              <Text style={[styles.detailText, { color: theme.text }]}>{tData.location}</Text>
+              <MaterialIcons
+                name="location-on"
+                size={18}
+                color={theme.onSurfaceVariant}
+                style={styles.icon}
+              />
+              <Text style={[styles.detailText, { color: theme.text }]}>
+                {tData.location}
+              </Text>
             </View>
           )}
 
           {/* Weather */}
           {weather && (
             <View style={styles.row}>
-              <MaterialIcons name={weather.condition.icon as any} size={18} color={theme.onSurfaceVariant} style={styles.icon} />
+              <MaterialIcons
+                name={weather.condition.icon as any}
+                size={18}
+                color={theme.onSurfaceVariant}
+                style={styles.icon}
+              />
               <Text style={[styles.detailText, { color: theme.text }]}>
-                {weather.kind === 'hourly'
+                {weather.kind === "hourly"
                   ? `${weather.temperature}°C · ${weather.condition.label}`
                   : `${weather.temperatureMin}°–${weather.temperatureMax}°C · ${weather.condition.label}`}
               </Text>
@@ -222,7 +321,12 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
           {/* Description */}
           {tData.description && (
             <View style={styles.row}>
-              <MaterialIcons name="notes" size={18} color={theme.onSurfaceVariant} style={styles.icon} />
+              <MaterialIcons
+                name="notes"
+                size={18}
+                color={theme.onSurfaceVariant}
+                style={styles.icon}
+              />
               <View style={{ flex: 1 }}>
                 <Text
                   style={[styles.detailText, { color: theme.text }]}
@@ -232,7 +336,14 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
                 </Text>
                 {tData.description.length > 100 && !showFullDesc && (
                   <TouchableOpacity onPress={() => setShowFullDesc(true)}>
-                    <Text style={[styles.showMoreText, { color: theme.primaryAction }]}>Show more</Text>
+                    <Text
+                      style={[
+                        styles.showMoreText,
+                        { color: theme.primaryAction },
+                      ]}
+                    >
+                      Show more
+                    </Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -242,7 +353,12 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
           {/* Checklist */}
           {tData.hasChecklist && checklistItems.length > 0 && (
             <View style={styles.row}>
-              <MaterialIcons name="checklist" size={18} color={theme.onSurfaceVariant} style={styles.icon} />
+              <MaterialIcons
+                name="checklist"
+                size={18}
+                color={theme.onSurfaceVariant}
+                style={styles.icon}
+              />
               <View style={{ flex: 1, gap: 8 }}>
                 {checklistItems.map((item) => (
                   <TouchableOpacity
@@ -252,11 +368,24 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
                     hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                   >
                     <MaterialIcons
-                      name={item.completed ? 'check-box' : 'check-box-outline-blank'}
+                      name={
+                        item.completed ? "check-box" : "check-box-outline-blank"
+                      }
                       size={18}
-                      color={item.completed ? theme.primaryAction : theme.onSurfaceVariant}
+                      color={
+                        item.completed
+                          ? theme.primaryAction
+                          : theme.onSurfaceVariant
+                      }
                     />
-                    <Text style={[styles.detailText, { color: theme.text, flex: 1 }]}>{item.text}</Text>
+                    <Text
+                      style={[
+                        styles.detailText,
+                        { color: theme.text, flex: 1 },
+                      ]}
+                    >
+                      {item.text}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -266,7 +395,12 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
           {/* Notification */}
           {tData.notification && (
             <View style={styles.row}>
-              <MaterialIcons name="notifications" size={18} color={theme.onSurfaceVariant} style={styles.icon} />
+              <MaterialIcons
+                name="notifications"
+                size={18}
+                color={theme.onSurfaceVariant}
+                style={styles.icon}
+              />
               <Text style={[styles.detailText, { color: theme.text }]}>
                 {tData.notification.type}
               </Text>
@@ -275,10 +409,112 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
 
           {/* Owner */}
           <View style={styles.row}>
-            <MaterialIcons name="calendar-today" size={18} color={theme.onSurfaceVariant} style={styles.icon} />
+            <MaterialIcons
+              name="calendar-today"
+              size={18}
+              color={theme.onSurfaceVariant}
+              style={styles.icon}
+            />
             <Text style={[styles.detailText, { color: theme.text }]}>
               {ownerName}
             </Text>
+          </View>
+
+          {/* Log what actually happened */}
+          <View style={[styles.row, { marginTop: 8 }]}>
+            <MaterialIcons
+              name="flip"
+              size={18}
+              color={theme.onSurfaceVariant}
+              style={styles.icon}
+            />
+            <View style={{ flex: 1 }}>
+              {!showLogActual ? (
+                <TouchableOpacity onPress={() => setShowLogActual(true)}>
+                  <Text
+                    style={[
+                      styles.detailText,
+                      { color: theme.primaryAction, fontWeight: "600" },
+                    ]}
+                  >
+                    Log what actually happened
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ gap: 10 }}>
+                  <TouchableOpacity
+                    onPress={handleLogAsPlanned}
+                    disabled={savingActual}
+                    style={{
+                      backgroundColor: theme.primaryAction,
+                      borderRadius: 8,
+                      paddingVertical: 10,
+                      alignItems: "center",
+                      opacity: savingActual ? 0.6 : 1,
+                    }}
+                  >
+                    <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>
+                      Done as planned
+                    </Text>
+                  </TouchableOpacity>
+
+                  <Text
+                    style={[
+                      styles.detailText,
+                      { color: theme.textMuted, fontSize: 12 },
+                    ]}
+                  >
+                    Or, what did you do instead?
+                  </Text>
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: theme.outlineVariant,
+                      borderRadius: 8,
+                      padding: 10,
+                      color: theme.text,
+                    }}
+                    placeholder="What actually happened"
+                    placeholderTextColor={theme.textMuted}
+                    value={substitutedText}
+                    onChangeText={setSubstitutedText}
+                  />
+                  <TextInput
+                    style={{
+                      borderWidth: 1,
+                      borderColor: theme.outlineVariant,
+                      borderRadius: 8,
+                      padding: 10,
+                      color: theme.text,
+                      minHeight: 60,
+                    }}
+                    placeholder="Optional note"
+                    placeholderTextColor={theme.textMuted}
+                    value={actualNoteText}
+                    onChangeText={setActualNoteText}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    onPress={handleLogDifferent}
+                    disabled={savingActual || !substitutedText.trim()}
+                    style={{
+                      backgroundColor: theme.surfaceContainer,
+                      borderWidth: 1,
+                      borderColor: theme.outlineVariant,
+                      borderRadius: 8,
+                      paddingVertical: 10,
+                      alignItems: "center",
+                      opacity:
+                        savingActual || !substitutedText.trim() ? 0.6 : 1,
+                    }}
+                  >
+                    <Text style={{ color: theme.text, fontWeight: "600" }}>
+                      Save
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
           </View>
         </View>
       </View>
@@ -288,7 +524,7 @@ export function TaskPreviewPopover({ visible, onClose, task, anchor, onEdit, onD
 
 const styles = StyleSheet.create({
   overlay: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
@@ -296,34 +532,34 @@ const styles = StyleSheet.create({
     zIndex: 99999,
   },
   scrim: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
   },
   popover: {
     borderRadius: RoundedGeometry.default,
     borderWidth: 1,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 20,
     padding: 16,
     paddingTop: 8,
-    display: 'flex',
-    flexDirection: 'column',
+    display: "flex",
+    flexDirection: "column",
     gap: 12,
   },
   centeredFallback: {
-    alignSelf: 'center',
-    top: '30%',
+    alignSelf: "center",
+    top: "30%",
   },
   actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginRight: -8,
   },
   iconBtn: {
@@ -331,8 +567,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 12,
   },
   checkboxBtn: {
@@ -345,25 +581,25 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   checklistItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   titleText: {
     fontFamily: Fonts.headline,
     fontSize: 20, // using hardcoded size as headlineSm is not in Typography
-    fontWeight: '700',
+    fontWeight: "700",
     flex: 1,
   },
   row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: 12,
   },
   icon: {
     marginTop: 2,
     width: 18,
-    textAlign: 'center',
+    textAlign: "center",
   },
   iconPlaceholder: {
     width: 18,
@@ -381,7 +617,7 @@ const styles = StyleSheet.create({
   showMoreText: {
     fontFamily: Fonts.body,
     fontSize: Typography.labelSm.fontSize,
-    fontWeight: '600',
+    fontWeight: "600",
     marginTop: 4,
   },
 });
