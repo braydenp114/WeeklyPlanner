@@ -61,6 +61,12 @@ export interface Task {
   hasChecklist?: boolean;
   /** Sub-items shown when hasChecklist is true. */
   checklistItems?: ChecklistItem[];
+  /** Whether this task represents a deadline to track (rather than a schedulable block). */
+  isDeadline?: boolean;
+  /** How many hours before the deadline to start warning, if no time has been allocated. */
+  deadlineWarningHours?: number | null;
+  /** If set, this regular task counts as "allocated time" toward the given deadline task's ID. */
+  linkedDeadlineId?: string | null;
 }
 
 export type CreateTaskData = Omit<Task, 'id' | 'ownerId' | 'createdAt'>;
@@ -354,4 +360,82 @@ export async function getTaskById(id: string): Promise<Task | null> {
     return { id: docSnap.id, ...docSnap.data() } as Task;
   }
   return null;
+}
+
+/**
+ * Fetches all upcoming deadline tasks, for populating the "link to deadline" picker.
+ */
+export async function getUpcomingDeadlines(): Promise<Task[]> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const now = Timestamp.fromDate(new Date());
+
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('isDeadline', '==', true),
+    where('startDate', '>=', now)
+  );
+
+  const snapshot = await getDocs(q);
+  const deadlines: Task[] = [];
+  snapshot.forEach((doc) => {
+    deadlines.push({ id: doc.id, ...doc.data() } as Task);
+  });
+  return deadlines;
+}
+
+export interface UnallocatedDeadline {
+  task: Task;
+  hoursUntilDeadline: number;
+}
+
+/**
+ * Finds deadlines within their warning window that have no linked tasks
+ * (i.e. no time has been allocated toward them).
+ */
+export async function getUnallocatedDeadlines(): Promise<UnallocatedDeadline[]> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const now = new Date();
+  const lookahead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('isDeadline', '==', true),
+    where('startDate', '>=', Timestamp.fromDate(now)),
+    where('startDate', '<=', Timestamp.fromDate(lookahead))
+  );
+
+  const snapshot = await getDocs(q);
+  const deadlines: Task[] = [];
+  snapshot.forEach((doc) => {
+    deadlines.push({ id: doc.id, ...doc.data() } as Task);
+  });
+
+  const results: UnallocatedDeadline[] = [];
+
+  for (const deadline of deadlines) {
+    const warningHours = deadline.deadlineWarningHours ?? 72;
+    const deadlineDate = deadline.startDate.toDate();
+    const hoursUntil = (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (hoursUntil > warningHours) continue;
+
+    const linkedQuery = query(
+      collection(db, TASKS_COLLECTION),
+      where('ownerId', '==', currentUser.uid),
+      where('linkedDeadlineId', '==', deadline.id)
+    );
+    const linkedSnapshot = await getDocs(linkedQuery);
+
+    if (linkedSnapshot.empty) {
+      results.push({ task: deadline, hoursUntilDeadline: hoursUntil });
+    }
+  }
+
+  return results;
 }
