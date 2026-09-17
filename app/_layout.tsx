@@ -15,7 +15,7 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handleError = (event: ErrorEvent) => {
         console.error('[Global Error Listener]', event.error?.code, event.error?.message, event.error?.stack, event.error);
       };
