@@ -894,7 +894,7 @@ export default function NewTaskModal({
               </View>
 
               {/* Location */}
-              <View style={[styles.fieldSection, { zIndex: 30 }]}>
+              <View style={[styles.fieldSection, { zIndex: 18 }]}>
                 <View style={styles.fieldIcon}>
                   <MaterialIcons
                     name="location-on"
