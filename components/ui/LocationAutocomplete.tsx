@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Fonts, RoundedGeometry } from '@/constants/theme';
+import { PRESET_LOCATIONS } from '@/constants/presetLocations';
 
 export interface LocationCoordinates {
   latitude: number;
@@ -21,6 +22,8 @@ export interface LocationSuggestion {
   subtitle: string;
   fullAddress: string;
   coordinates?: LocationCoordinates;
+  isPreset?: boolean;
+  icon?: string;
 }
 
 interface LocationAutocompleteProps {
@@ -39,6 +42,7 @@ export function LocationAutocomplete({
   theme,
 }: LocationAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
+  const [presetSuggestions, setPresetSuggestions] = useState<LocationSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -149,6 +153,32 @@ export function LocationAutocomplete({
     setLoading(false);
   }, []);
 
+  const filterPresets = (query: string) => {
+    if (!query.trim()) {
+      return PRESET_LOCATIONS.map(p => ({
+        id: p.id,
+        title: p.name,
+        subtitle: p.address,
+        fullAddress: `${p.name}, ${p.address}`,
+        coordinates: { latitude: p.latitude, longitude: p.longitude },
+        isPreset: true,
+        icon: p.icon || 'star',
+      }));
+    }
+    const lowerQ = query.toLowerCase();
+    return PRESET_LOCATIONS.filter(p => 
+      p.name.toLowerCase().includes(lowerQ) || p.address.toLowerCase().includes(lowerQ)
+    ).map(p => ({
+      id: p.id,
+      title: p.name,
+      subtitle: p.address,
+      fullAddress: `${p.name}, ${p.address}`,
+      coordinates: { latitude: p.latitude, longitude: p.longitude },
+      isPreset: true,
+      icon: p.icon || 'star',
+    }));
+  };
+
   const handleTextChange = (text: string) => {
     onChangeText(text);
     justSelectedRef.current = false;
@@ -157,12 +187,17 @@ export function LocationAutocomplete({
       clearTimeout(debounceTimerRef.current);
     }
 
+    const filteredPresets = filterPresets(text);
+    setPresetSuggestions(filteredPresets);
+
     if (!text.trim()) {
       setSuggestions([]);
-      setIsOpen(false);
+      setIsOpen(true);
       setLoading(false);
       return;
     }
+
+    setIsOpen(true);
 
     debounceTimerRef.current = setTimeout(() => {
       if (!justSelectedRef.current) {
@@ -175,6 +210,7 @@ export function LocationAutocomplete({
     justSelectedRef.current = true;
     setIsOpen(false);
     setSuggestions([]);
+    setPresetSuggestions([]);
     onSelectLocation(item.fullAddress, item.coordinates);
   };
 
@@ -209,7 +245,8 @@ export function LocationAutocomplete({
           onChangeText={handleTextChange}
           onFocus={() => {
             setIsFocused(true);
-            if (suggestions.length > 0 && !justSelectedRef.current) {
+            if (!justSelectedRef.current) {
+              setPresetSuggestions(filterPresets(value));
               setIsOpen(true);
             }
           }}
@@ -236,7 +273,7 @@ export function LocationAutocomplete({
         </View>
       </View>
 
-      {isOpen && suggestions.length > 0 && (
+      {isOpen && (presetSuggestions.length > 0 || suggestions.length > 0) && (
         <View
           style={[
             styles.dropdown,
@@ -246,29 +283,69 @@ export function LocationAutocomplete({
             },
           ]}
         >
-          {suggestions.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[
-                styles.suggestionItem,
-                { borderBottomColor: theme.outlineVariant },
-              ]}
-              onPress={() => handleSelect(item)}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="location-on" size={18} color={theme.primaryAction} style={styles.pinIcon} />
-              <View style={styles.suggestionTexts}>
-                <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>
-                  {item.title}
+          {presetSuggestions.length > 0 && (
+            <View>
+              <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>
+                Common locations
+              </Text>
+              {presetSuggestions.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.suggestionItem,
+                    { borderBottomColor: theme.outlineVariant },
+                  ]}
+                  onPress={() => handleSelect(item)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name={item.icon as any} size={18} color={theme.primaryAction} style={styles.pinIcon} />
+                  <View style={styles.suggestionTexts}>
+                    <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    {item.subtitle ? (
+                      <Text style={[styles.itemSubtitle, { color: theme.textMuted }]} numberOfLines={1}>
+                        {item.subtitle}
+                      </Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {suggestions.length > 0 && (
+            <View>
+              {presetSuggestions.length > 0 && (
+                <Text style={[styles.sectionHeader, { color: theme.textMuted }]}>
+                  Search results
                 </Text>
-                {item.subtitle ? (
-                  <Text style={[styles.itemSubtitle, { color: theme.textMuted }]} numberOfLines={1}>
-                    {item.subtitle}
-                  </Text>
-                ) : null}
-              </View>
-            </TouchableOpacity>
-          ))}
+              )}
+              {suggestions.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.suggestionItem,
+                    { borderBottomColor: theme.outlineVariant },
+                  ]}
+                  onPress={() => handleSelect(item)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="location-on" size={18} color={theme.primaryAction} style={styles.pinIcon} />
+                  <View style={styles.suggestionTexts}>
+                    <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>
+                      {item.title}
+                    </Text>
+                    {item.subtitle ? (
+                      <Text style={[styles.itemSubtitle, { color: theme.textMuted }]} numberOfLines={1}>
+                        {item.subtitle}
+                      </Text>
+                    ) : null}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
         </View>
       )}
     </View>
@@ -322,8 +399,17 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 10,
     zIndex: 1000,
-    overflow: 'hidden',
-    maxHeight: 240,
+    maxHeight: 280,
+  },
+  sectionHeader: {
+    fontFamily: Fonts.headline,
+    fontSize: 12,
+    fontWeight: '600',
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   suggestionItem: {
     flexDirection: 'row',
