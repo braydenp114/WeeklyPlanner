@@ -59,6 +59,6 @@ if (app) {
 
 export const auth = authInstance as ReturnType<typeof getAuth>;
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app);
+export const db = app ? getFirestore(app) : (null as any);
 
 export default app;

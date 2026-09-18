@@ -1,7 +1,7 @@
 import { Stack, DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
-import { useEffect } from 'react';
+
 
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemePreferenceProvider } from '@/context/ThemePreferenceContext';
