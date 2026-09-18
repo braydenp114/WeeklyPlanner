@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { AuthProvider } from '@/context/AuthContext';
+import { ThemePreferenceProvider } from '@/context/ThemePreferenceContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import React, { useEffect } from 'react';
@@ -12,10 +13,18 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
+  return (
+    <ThemePreferenceProvider>
+      <AppContent />
+    </ThemePreferenceProvider>
+  );
+}
+
+function AppContent() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handleError = (event: ErrorEvent) => {
         console.error('[Global Error Listener]', event.error?.code, event.error?.message, event.error?.stack, event.error);
       };

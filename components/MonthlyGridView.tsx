@@ -1,5 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TaskItem, HoverableTaskCard, getPastEventStyle } from '@/components/WeeklyGrid';
@@ -148,9 +149,20 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
                               onTaskClick?.(t, rect);
                             }}
                           >
-                            <View style={[styles.eventDot, pastDotStyle]} />
+                            {task.originalTaskData.completed ? (
+                              <MaterialIcons name="check-circle" size={9} color={theme.textMuted} />
+                            ) : (
+                              <View style={[styles.eventDot, pastDotStyle]} />
+                            )}
                             {task.isAllDay ? (
-                              <Text style={[styles.eventTitle, { color: isCurrentMonth ? (isPast ? theme.textMuted : theme.text) : theme.textMuted }]} numberOfLines={1}>
+                              <Text
+                                style={[
+                                  styles.eventTitle,
+                                  { color: isCurrentMonth ? (isPast ? theme.textMuted : theme.text) : theme.textMuted },
+                                  task.originalTaskData.completed && styles.completedStrike,
+                                ]}
+                                numberOfLines={1}
+                              >
                                 {task.title}
                               </Text>
                             ) : (
@@ -158,7 +170,14 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
                                 <Text style={[styles.eventTime, { color: isCurrentMonth ? (isPast ? 'rgba(118,117,134,0.5)' : theme.textMuted) : 'rgba(118,117,134,0.5)' }]} numberOfLines={1}>
                                   {formatHourLabel(task.startHour)}
                                 </Text>
-                                <Text style={[styles.eventTitle, { color: isCurrentMonth ? (isPast ? theme.textMuted : theme.text) : theme.textMuted }]} numberOfLines={1}>
+                                <Text
+                                  style={[
+                                    styles.eventTitle,
+                                    { color: isCurrentMonth ? (isPast ? theme.textMuted : theme.text) : theme.textMuted },
+                                    task.originalTaskData.completed && styles.completedStrike,
+                                  ]}
+                                  numberOfLines={1}
+                                >
                                   {task.title}
                                 </Text>
                               </>
@@ -267,6 +286,9 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.body,
     fontSize: 11,
     flex: 1,
+  },
+  completedStrike: {
+    textDecorationLine: 'line-through',
   },
   overflowText: {
     fontFamily: Fonts.mono,

@@ -23,9 +23,10 @@ import {
 } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MonthlyGridView from './MonthlyGridView';
-import { getTasksForRange, Task, deleteTask } from '@/services/tasksService';
+import { getTasksForRange, Task, deleteTask, deleteSeries } from '@/services/tasksService';
 import { AnchorRect } from './ui/TimeDropdown';
 import { ConfirmDialog } from './ConfirmDialog';
+import { RecurringActionDialog, RecurringActionScope } from './RecurringActionDialog';
 import { TaskPreviewPopover } from './TaskPreviewPopover';
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
@@ -118,7 +119,8 @@ export type TaskItem = {
   startHour: number;
   durationHours: number;
   colorHex: string;
-  tag: string;
+  /** The task's category (e.g. study/workout/work/personal), shown as a small pill on the card. */
+  category: string;
   /** The actual calendar date this occurrence falls on, for month view matching. */
   actualDate: Date;
   /** The original Firestore document ID, for edit/delete operations. */
@@ -148,7 +150,7 @@ function mapTasksToItems(
   for (const task of tasks) {
     const taskStart = task.startDate.toDate();
     const taskEnd = task.endDate.toDate();
-    const tag = task.title.split(/\s+/)[0] || '';
+    const category = task.category || '';
 
     for (let dayIdx = 0; dayIdx < gridDates.length; dayIdx++) {
       const gridDate = gridDates[dayIdx];
@@ -168,7 +170,7 @@ function mapTasksToItems(
           startHour: 0,
           durationHours: 24,
           colorHex: task.colorHex,
-          tag,
+          category,
           actualDate: gridDate,
           originalTaskId: task.id || '',
           isRecurrenceInstance: !!task.seriesId,
@@ -198,7 +200,7 @@ function mapTasksToItems(
         startHour,
         durationHours,
         colorHex: task.colorHex,
-        tag,
+        category,
         actualDate: gridDate,
         originalTaskId: task.id || '',
         isRecurrenceInstance: !!task.seriesId,
@@ -317,16 +319,31 @@ export default function WeeklyGrid() {
 
   const { openEditTaskModal, refreshTasks } = useNav();
 
+  const [actionTask, setActionTask] = useState<TaskItem | null>(null);
+  const [actionMode, setActionMode] = useState<'edit' | 'delete'>('edit');
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
   const handleEditTask = useCallback((task: TaskItem) => {
     setSelectedTask(null);
-    openEditTaskModal(task.originalTaskData);
+    if (task.isRecurrenceInstance) {
+      setActionTask(task);
+      setActionMode('edit');
+    } else {
+      openEditTaskModal(task.originalTaskData, 'this');
+    }
   }, [openEditTaskModal]);
 
   const [deleteConfirmTask, setDeleteConfirmTask] = useState<TaskItem | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteTask = useCallback((task: TaskItem) => {
-    setDeleteConfirmTask(task);
+    setSelectedTask(null);
+    if (task.isRecurrenceInstance) {
+      setActionTask(task);
+      setActionMode('delete');
+    } else {
+      setDeleteConfirmTask(task);
+    }
   }, []);
 
   const confirmDelete = async () => {
@@ -339,6 +356,30 @@ export default function WeeklyGrid() {
     } finally {
       setIsDeleting(false);
       setDeleteConfirmTask(null);
+    }
+  };
+
+  const handleActionConfirm = async (scope: RecurringActionScope) => {
+    if (!actionTask) return;
+
+    if (actionMode === 'edit') {
+      openEditTaskModal(actionTask.originalTaskData, scope);
+      setActionTask(null);
+    } else if (actionMode === 'delete') {
+      setIsActionLoading(true);
+      try {
+        if (scope === 'this') {
+          await deleteTask(actionTask.originalTaskId);
+        } else {
+          await deleteSeries(actionTask.originalTaskData.seriesId!);
+        }
+        refreshTasks();
+        setActionTask(null);
+      } catch (e: any) {
+        setTasksError(e.message || 'Failed to delete task');
+      } finally {
+        setIsActionLoading(false);
+      }
     }
   };
 
@@ -688,9 +729,21 @@ export default function WeeklyGrid() {
                               ]}
                               onPress={handleTaskClick}
                             >
-                              <Text style={[styles.allDayChipText, isPast && { color: 'rgba(255,255,255,0.85)' }]} numberOfLines={1}>
-                                {task.title}
-                              </Text>
+                              <View style={styles.allDayChipRow}>
+                                {task.originalTaskData.completed && (
+                                  <MaterialIcons name="check-circle" size={11} color="#FFFFFF" />
+                                )}
+                                <Text
+                                  style={[
+                                    styles.allDayChipText,
+                                    isPast && { color: 'rgba(255,255,255,0.85)' },
+                                    task.originalTaskData.completed && styles.completedStrike,
+                                  ]}
+                                  numberOfLines={1}
+                                >
+                                  {task.title}
+                                </Text>
+                              </View>
                             </HoverableTaskCard>
                           );
                         })}
@@ -798,14 +851,28 @@ export default function WeeklyGrid() {
                             onPress={handleTaskClick}
                           >
                             <View style={styles.taskCardHeader}>
-                              <Text style={[styles.taskTagText, isPast && { opacity: 0.8 }]}>{task.tag}</Text>
+                              <View style={styles.taskCardHeaderLeft}>
+                                {task.originalTaskData.completed && (
+                                  <MaterialIcons name="check-circle" size={12} color="#FFFFFF" />
+                                )}
+                                {!!task.category && (
+                                  <Text style={[styles.taskTagText, isPast && { opacity: 0.8 }]}>{task.category}</Text>
+                                )}
+                              </View>
                               <Text style={[styles.taskTimeText, isPast && { color: 'rgba(255,255,255,0.7)' }]}>
                                 {String(Math.floor(task.startHour)).padStart(2, '0')}:
                                 {String(Math.round((task.startHour % 1) * 60)).padStart(2, '0')}
                               </Text>
                             </View>
 
-                            <Text style={[styles.taskTitleText, isPast && { color: 'rgba(255,255,255,0.85)' }]} numberOfLines={2}>
+                            <Text
+                              style={[
+                                styles.taskTitleText,
+                                isPast && { color: 'rgba(255,255,255,0.85)' },
+                                task.originalTaskData.completed && styles.completedStrike,
+                              ]}
+                              numberOfLines={2}
+                            >
                               {task.title}
                             </Text>
 
@@ -842,6 +909,7 @@ export default function WeeklyGrid() {
         anchor={popoverAnchor}
         onEdit={handleEditTask}
         onDelete={handleDeleteTask}
+        onChanged={refreshTasks}
       />
       
       <ConfirmDialog
@@ -854,6 +922,14 @@ export default function WeeklyGrid() {
         isLoading={isDeleting}
         onConfirm={confirmDelete}
         onClose={() => setDeleteConfirmTask(null)}
+      />
+
+      <RecurringActionDialog
+        visible={!!actionTask}
+        mode={actionMode}
+        isLoading={isActionLoading}
+        onConfirm={handleActionConfirm}
+        onClose={() => setActionTask(null)}
       />
     </View>
   );
@@ -1062,6 +1138,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  taskCardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  completedStrike: {
+    textDecorationLine: 'line-through',
+  },
   taskTagText: {
     fontFamily: Fonts.mono,
     fontSize: 9,
@@ -1170,6 +1254,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 4,
     paddingVertical: 2,
+  },
+  allDayChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   allDayChipText: {
     fontFamily: Fonts.mono,

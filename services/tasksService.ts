@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { generateOccurrenceDates, getRecurrenceEndBound, MAX_OCCURRENCES_PER_TASK } from '../utils/expandRecurrences';
+import { scheduleReminder } from '../hooks/use-task-reminders';
 
 export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekday' | 'custom';
 export type BusyStatus = 'busy' | 'free';
@@ -27,6 +28,12 @@ export interface CustomRecurrenceRule {
   endOccurrences?: number;
 }
 
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+}
+
 export interface Task {
   id?: string;
   title: string;
@@ -35,6 +42,7 @@ export interface Task {
   latitude?: number | null;
   longitude?: number | null;
   colorHex: string;
+  category: string | null;
   busyStatus: BusyStatus;
   visibility: Visibility;
   startDate: Timestamp;
@@ -47,6 +55,24 @@ export interface Task {
   ownerId: string;
   createdAt: Timestamp;
   seriesId?: string;
+  /** Whether this task itself is marked as done. */
+  completed?: boolean;
+  /** Whether this task has an attached sub-item checklist. */
+  hasChecklist?: boolean;
+  /** Sub-items shown when hasChecklist is true. */
+  checklistItems?: ChecklistItem[];
+  /** Whether this task represents a deadline to track (rather than a schedulable block). */
+  isDeadline?: boolean;
+  /** How many hours before the deadline to start warning, if no time has been allocated. */
+  deadlineWarningHours?: number | null;
+  /** If set, this regular task counts as "allocated time" toward the given deadline task's ID. */
+  linkedDeadlineId?: string | null;
+  /** What actually happened for this task, logged after its time block passed. */
+  actualStatus?: 'as_planned' | 'different' | null;
+  /** If actualStatus is 'different', what the user did instead. */
+  substitutedActivity?: string | null;
+  /** Optional diary-style note about how the task went. */
+  actualNote?: string | null;
 }
 
 export type CreateTaskData = Omit<Task, 'id' | 'ownerId' | 'createdAt'>;
@@ -70,6 +96,7 @@ export async function createTask(data: CreateTaskData): Promise<string> {
 
   if (data.recurrence === 'none') {
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
+    await scheduleReminder(data);
     return docRef.id;
   }
 
@@ -224,6 +251,58 @@ export async function updateTask(id: string, data: UpdateTaskData): Promise<void
 }
 
 /**
+ * Updates all occurrences in a series with new shared data and shifts the dates relative to timeDeltaMs.
+ */
+export async function updateSeries(seriesId: string, data: UpdateTaskData, timeDeltaMs: number, durationMs: number | null = null): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('seriesId', '==', seriesId)
+  );
+
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return;
+
+  const chunks: any[][] = [];
+  let currentChunk: any[] = [];
+  snapshot.docs.forEach((d) => {
+    currentChunk.push(d);
+    if (currentChunk.length === 490) {
+      chunks.push(currentChunk);
+      currentChunk = [];
+    }
+  });
+  if (currentChunk.length > 0) chunks.push(currentChunk);
+
+  // Exclude date fields from raw data since we are dynamically shifting them per-occurrence
+  const { startDate, endDate, ...sharedData } = data;
+
+  for (const chunk of chunks) {
+    const batch = writeBatch(db);
+    for (const docSnap of chunk) {
+      const taskData = docSnap.data();
+      const origStart = taskData.startDate.toDate();
+      const origEnd = taskData.endDate.toDate();
+
+      const newStart = new Date(origStart.getTime() + timeDeltaMs);
+      const newEnd = durationMs !== null 
+        ? new Date(newStart.getTime() + durationMs)
+        : new Date(origEnd.getTime() + timeDeltaMs);
+
+      batch.update(docSnap.ref, {
+        ...sharedData,
+        startDate: Timestamp.fromDate(newStart),
+        endDate: Timestamp.fromDate(newEnd),
+      });
+    }
+    await batch.commit();
+  }
+}
+
+/**
  * Deletes a task.
  */
 export async function deleteTask(id: string): Promise<void> {
@@ -232,6 +311,44 @@ export async function deleteTask(id: string): Promise<void> {
 
   const taskRef = doc(db, TASKS_COLLECTION, id);
   await deleteDoc(taskRef);
+}
+
+/**
+ * Deletes all tasks in a series.
+ */
+export async function deleteSeries(seriesId: string): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('seriesId', '==', seriesId)
+  );
+  
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return;
+
+  // Firestore batch limit is 500, but our series cap is 366, so one batch is usually enough.
+  // Still, we'll chunk it just to be perfectly safe.
+  const chunks: any[][] = [];
+  let currentChunk: any[] = [];
+  snapshot.docs.forEach((d) => {
+    currentChunk.push(d.ref);
+    if (currentChunk.length === 490) {
+      chunks.push(currentChunk);
+      currentChunk = [];
+    }
+  });
+  if (currentChunk.length > 0) chunks.push(currentChunk);
+
+  for (const chunk of chunks) {
+    const batch = writeBatch(db);
+    for (const ref of chunk) {
+      batch.delete(ref);
+    }
+    await batch.commit();
+  }
 }
 
 /**
@@ -249,4 +366,150 @@ export async function getTaskById(id: string): Promise<Task | null> {
     return { id: docSnap.id, ...docSnap.data() } as Task;
   }
   return null;
+}
+
+/**
+ * Fetches all upcoming deadline tasks, for populating the "link to deadline" picker.
+ */
+export async function getUpcomingDeadlines(): Promise<Task[]> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const now = Timestamp.fromDate(new Date());
+
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('isDeadline', '==', true),
+    where('startDate', '>=', now)
+  );
+
+  const snapshot = await getDocs(q);
+  const deadlines: Task[] = [];
+  snapshot.forEach((doc) => {
+    deadlines.push({ id: doc.id, ...doc.data() } as Task);
+  });
+  return deadlines;
+}
+
+export interface UnallocatedDeadline {
+  task: Task;
+  hoursUntilDeadline: number;
+}
+
+/**
+ * Finds deadlines within their warning window that have no linked tasks
+ * (i.e. no time has been allocated toward them).
+ */
+export async function getUnallocatedDeadlines(): Promise<UnallocatedDeadline[]> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const now = new Date();
+  const lookahead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('isDeadline', '==', true),
+    where('startDate', '>=', Timestamp.fromDate(now)),
+    where('startDate', '<=', Timestamp.fromDate(lookahead))
+  );
+
+  const snapshot = await getDocs(q);
+  const deadlines: Task[] = [];
+  snapshot.forEach((doc) => {
+    deadlines.push({ id: doc.id, ...doc.data() } as Task);
+  });
+
+  const results: UnallocatedDeadline[] = [];
+
+  for (const deadline of deadlines) {
+    const warningHours = deadline.deadlineWarningHours ?? 72;
+    const deadlineDate = deadline.startDate.toDate();
+    const hoursUntil = (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    if (hoursUntil > warningHours) continue;
+
+    const linkedQuery = query(
+      collection(db, TASKS_COLLECTION),
+      where('ownerId', '==', currentUser.uid),
+      where('linkedDeadlineId', '==', deadline.id)
+    );
+    const linkedSnapshot = await getDocs(linkedQuery);
+
+    if (linkedSnapshot.empty) {
+      results.push({ task: deadline, hoursUntilDeadline: hoursUntil });
+    }
+  }
+
+  return results;
+}
+export interface LogActualParams {
+  status: 'as_planned' | 'different';
+  substitutedActivity?: string | null;
+  note?: string | null;
+}
+
+/**
+ * Logs what actually happened for a task, after its scheduled block has passed.
+ */
+export async function logTaskActual(id: string, params: LogActualParams): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const taskRef = doc(db, TASKS_COLLECTION, id);
+  await updateDoc(taskRef, {
+    actualStatus: params.status,
+    substitutedActivity: params.status === 'different' ? (params.substitutedActivity?.trim() || null) : null,
+    actualNote: params.note?.trim() || null,
+    completed: params.status === 'as_planned' ? true : false,
+  });
+}
+
+export interface CategoryReviewStats {
+  category: string;
+  plannedHours: number;
+  completedAsPlannedHours: number;
+  substitutedCount: number;
+  unloggedCount: number;
+}
+
+/**
+ * Aggregates a set of tasks (typically one week's worth) into per-category
+ * planned-vs-actual stats for the Weekly Review screen.
+ */
+export function calculateWeeklyReview(tasks: Task[]): CategoryReviewStats[] {
+  const statsByCategory = new Map<string, CategoryReviewStats>();
+
+  for (const task of tasks) {
+    if (task.isDeadline) continue; // deadlines aren't schedulable time, skip them
+
+    const category = task.category || 'Uncategorized';
+    if (!statsByCategory.has(category)) {
+      statsByCategory.set(category, {
+        category,
+        plannedHours: 0,
+        completedAsPlannedHours: 0,
+        substitutedCount: 0,
+        unloggedCount: 0,
+      });
+    }
+    const stats = statsByCategory.get(category)!;
+
+    const durationHours =
+      (task.endDate.toDate().getTime() - task.startDate.toDate().getTime()) / (1000 * 60 * 60);
+    stats.plannedHours += durationHours;
+
+    if (task.actualStatus === 'as_planned') {
+      stats.completedAsPlannedHours += durationHours;
+    } else if (task.actualStatus === 'different') {
+      stats.substitutedCount += 1;
+    } else {
+      const isPast = task.endDate.toDate().getTime() < Date.now();
+      if (isPast) stats.unloggedCount += 1;
+    }
+  }
+
+  return Array.from(statsByCategory.values());
 }
