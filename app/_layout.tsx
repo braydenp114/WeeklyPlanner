@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 
 import { AuthProvider } from '@/context/AuthContext';
+import { ThemePreferenceProvider } from '@/context/ThemePreferenceContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import React, { useEffect } from 'react';
@@ -12,6 +13,14 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
+  return (
+    <ThemePreferenceProvider>
+      <AppContent />
+    </ThemePreferenceProvider>
+  );
+}
+
+function AppContent() {
   const colorScheme = useColorScheme();
 
   useEffect(() => {
