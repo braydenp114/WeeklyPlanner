@@ -119,7 +119,8 @@ export type TaskItem = {
   startHour: number;
   durationHours: number;
   colorHex: string;
-  tag: string;
+  /** The task's category (e.g. study/workout/work/personal), shown as a small pill on the card. */
+  category: string;
   /** The actual calendar date this occurrence falls on, for month view matching. */
   actualDate: Date;
   /** The original Firestore document ID, for edit/delete operations. */
@@ -149,7 +150,7 @@ function mapTasksToItems(
   for (const task of tasks) {
     const taskStart = task.startDate.toDate();
     const taskEnd = task.endDate.toDate();
-    const tag = task.title.split(/\s+/)[0] || '';
+    const category = task.category || '';
 
     for (let dayIdx = 0; dayIdx < gridDates.length; dayIdx++) {
       const gridDate = gridDates[dayIdx];
@@ -169,7 +170,7 @@ function mapTasksToItems(
           startHour: 0,
           durationHours: 24,
           colorHex: task.colorHex,
-          tag,
+          category,
           actualDate: gridDate,
           originalTaskId: task.id || '',
           isRecurrenceInstance: !!task.seriesId,
@@ -199,7 +200,7 @@ function mapTasksToItems(
         startHour,
         durationHours,
         colorHex: task.colorHex,
-        tag,
+        category,
         actualDate: gridDate,
         originalTaskId: task.id || '',
         isRecurrenceInstance: !!task.seriesId,
@@ -854,7 +855,9 @@ export default function WeeklyGrid() {
                                 {task.originalTaskData.completed && (
                                   <MaterialIcons name="check-circle" size={12} color="#FFFFFF" />
                                 )}
-                                <Text style={[styles.taskTagText, isPast && { opacity: 0.8 }]}>{task.tag}</Text>
+                                {!!task.category && (
+                                  <Text style={[styles.taskTagText, isPast && { opacity: 0.8 }]}>{task.category}</Text>
+                                )}
                               </View>
                               <Text style={[styles.taskTimeText, isPast && { color: 'rgba(255,255,255,0.7)' }]}>
                                 {String(Math.floor(task.startHour)).padStart(2, '0')}:
