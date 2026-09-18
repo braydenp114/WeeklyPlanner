@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Colors, Fonts, RoundedGeometry, Typography } from "@/constants/theme";
@@ -32,6 +33,7 @@ export default function AnalyticsScreen() {
 
   const [stats, setStats] = useState<CategoryReviewStats[]>([]);
   const [loading, setLoading] = useState(false);
+  const [goalTargets, setGoalTargets] = useState<Record<string, string>>({});
 
   const loadReview = useCallback(async () => {
     if (!user) return;
@@ -77,36 +79,64 @@ export default function AnalyticsScreen() {
         )}
 
         {!loading &&
-          stats.map((s) => (
-            <View
-              key={s.category}
-              style={[
-                styles.card,
-                {
-                  backgroundColor: theme.surfaceContainer,
-                  borderColor: theme.outlineVariant,
-                },
-              ]}
-            >
-              <Text style={[styles.categoryName, { color: theme.text }]}>
-                {s.category}
-              </Text>
-              <Text style={[styles.statLine, { color: theme.textSecondary }]}>
-                Planned: {s.plannedHours.toFixed(1)}h
-              </Text>
-              <Text style={[styles.statLine, { color: theme.textSecondary }]}>
-                Completed as planned: {s.completedAsPlannedHours.toFixed(1)}h
-                {s.plannedHours > 0 &&
-                  ` (${Math.round((s.completedAsPlannedHours / s.plannedHours) * 100)}%)`}
-              </Text>
-              <Text style={[styles.statLine, { color: theme.textSecondary }]}>
-                Substituted: {s.substitutedCount}
-              </Text>
-              <Text style={[styles.statLine, { color: theme.textSecondary }]}>
-                Not yet logged: {s.unloggedCount}
-              </Text>
-            </View>
-          ))}
+          stats.map((s) => {
+            const targetText = goalTargets[s.category] ?? "";
+            const target = parseFloat(targetText);
+            const hasGoal = !isNaN(target) && target > 0;
+            const pending = hasGoal ? Math.max(target - s.plannedHours, 0) : null;
+
+            return (
+              <View
+                key={s.category}
+                style={[
+                  styles.card,
+                  {
+                    backgroundColor: theme.surfaceContainer,
+                    borderColor: theme.outlineVariant,
+                  },
+                ]}
+              >
+                <Text style={[styles.categoryName, { color: theme.text }]}>
+                  {s.category}
+                </Text>
+                <Text style={[styles.statLine, { color: theme.textSecondary }]}>
+                  Planned: {s.plannedHours.toFixed(1)}h
+                </Text>
+                <Text style={[styles.statLine, { color: theme.textSecondary }]}>
+                  Completed as planned: {s.completedAsPlannedHours.toFixed(1)}h
+                  {s.plannedHours > 0 &&
+                    ` (${Math.round((s.completedAsPlannedHours / s.plannedHours) * 100)}%)`}
+                </Text>
+                <Text style={[styles.statLine, { color: theme.textSecondary }]}>
+                  Substituted: {s.substitutedCount}
+                </Text>
+                <Text style={[styles.statLine, { color: theme.textSecondary }]}>
+                  Not yet logged: {s.unloggedCount}
+                </Text>
+
+                <View style={styles.goalRow}>
+                  <Text style={[styles.goalLabel, { color: theme.textSecondary }]}>
+                    Weekly goal (hours)
+                  </Text>
+                  <TextInput
+                    style={[styles.goalInput, { color: theme.text, borderColor: theme.outlineVariant }]}
+                    keyboardType="numeric"
+                    value={targetText}
+                    onChangeText={(text) =>
+                      setGoalTargets((prev) => ({ ...prev, [s.category]: text }))
+                    }
+                    placeholder="e.g. 5"
+                    placeholderTextColor={theme.textMuted}
+                  />
+                </View>
+                {pending !== null && (
+                  <Text style={[styles.pendingText, { color: theme.primaryAction }]}>
+                    {pending.toFixed(1)}h pending this week
+                  </Text>
+                )}
+              </View>
+            );
+          })}
       </ScrollView>
     </SafeAreaView>
   );
@@ -147,5 +177,29 @@ const styles = StyleSheet.create({
   statLine: {
     fontFamily: Fonts.body,
     fontSize: 14,
+  },
+  goalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+  goalLabel: {
+    fontFamily: Fonts.body,
+    fontSize: 13,
+  },
+  goalInput: {
+    borderWidth: 1,
+    borderRadius: RoundedGeometry.sm,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    width: 60,
+    textAlign: "center",
+  },
+  pendingText: {
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 4,
   },
 });
