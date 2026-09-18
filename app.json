@@ -64,6 +64,13 @@
           "locationAlwaysPermission": "WeeklyPlanner uses your location in the background to automatically mark tasks as completed when you arrive.",
           "isAndroidBackgroundLocationEnabled": true
         }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "WeeklyPlanner needs to access your calendar to sync tasks.",
+          "calendarFullAccessPermission": "WeeklyPlanner needs full access to your calendar to create and manage synced tasks."
+        }
       ]
     ],
     "experiments": {

@@ -14,6 +14,7 @@ import {
 import { db, auth } from '../config/firebase';
 import { generateOccurrenceDates, getRecurrenceEndBound, MAX_OCCURRENCES_PER_TASK } from '../utils/expandRecurrences';
 import { scheduleReminder } from '../hooks/use-task-reminders';
+import { syncTaskToDevice, removeTaskFromDevice } from './calendarSyncService';
 
 export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekday' | 'custom';
 export type BusyStatus = 'busy' | 'free';
@@ -103,6 +104,7 @@ export async function createTask(data: CreateTaskData): Promise<string> {
   if (data.recurrence === 'none') {
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
     await scheduleReminder(data);
+    await syncTaskToDevice({ id: docRef.id, ...baseDocData } as Task & { id: string });
     return docRef.id;
   }
 
@@ -134,6 +136,7 @@ export async function createTask(data: CreateTaskData): Promise<string> {
   const maxOccurrences = data.customRecurrenceRule?.endOccurrences ?? undefined;
   
   let firstDocId = '';
+  const occurrencesToSync: (Task & { id: string })[] = [];
 
   for (const occDate of occurrenceDates) {
     if (totalEmitted >= MAX_OCCURRENCES_PER_TASK) break;
@@ -153,12 +156,17 @@ export async function createTask(data: CreateTaskData): Promise<string> {
     };
 
     batch.set(docRef, occData);
+    occurrencesToSync.push({ id: docRef.id, ...occData } as Task & { id: string });
     batchCount++;
     totalEmitted++;
   }
 
   if (batchCount > 0) {
     await batch.commit();
+    // Sync all generated occurrences
+    for (const occ of occurrencesToSync) {
+      await syncTaskToDevice(occ);
+    }
   } else {
     // Fallback if no occurrences generated for some reason
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
@@ -254,6 +262,12 @@ export async function updateTask(id: string, data: UpdateTaskData): Promise<void
 
   const taskRef = doc(db, TASKS_COLLECTION, id);
   await updateDoc(taskRef, data);
+
+  // Sync to device calendar
+  const updatedTask = await getTaskById(id);
+  if (updatedTask) {
+    await syncTaskToDevice(updatedTask as Task & { id: string });
+  }
 }
 
 /**
@@ -288,6 +302,8 @@ export async function updateSeries(seriesId: string, data: UpdateTaskData, timeD
 
   for (const chunk of chunks) {
     const batch = writeBatch(db);
+    const occurrencesToSync: (Task & { id: string })[] = [];
+
     for (const docSnap of chunk) {
       const taskData = docSnap.data();
       const origStart = taskData.startDate.toDate();
@@ -298,13 +314,27 @@ export async function updateSeries(seriesId: string, data: UpdateTaskData, timeD
         ? new Date(newStart.getTime() + durationMs)
         : new Date(origEnd.getTime() + timeDeltaMs);
 
-      batch.update(docSnap.ref, {
+      const newData = {
         ...sharedData,
         startDate: Timestamp.fromDate(newStart),
         endDate: Timestamp.fromDate(newEnd),
-      });
+      };
+
+      batch.update(docSnap.ref, newData);
+      
+      // Merge for sync
+      occurrencesToSync.push({
+        id: docSnap.id,
+        ...taskData,
+        ...newData,
+      } as Task & { id: string });
     }
     await batch.commit();
+    
+    // Sync chunk
+    for (const occ of occurrencesToSync) {
+      await syncTaskToDevice(occ);
+    }
   }
 }
 
@@ -317,6 +347,7 @@ export async function deleteTask(id: string): Promise<void> {
 
   const taskRef = doc(db, TASKS_COLLECTION, id);
   await deleteDoc(taskRef);
+  await removeTaskFromDevice(id);
 }
 
 /**
@@ -354,6 +385,11 @@ export async function deleteSeries(seriesId: string): Promise<void> {
       batch.delete(ref);
     }
     await batch.commit();
+    
+    // Remove from device calendar
+    for (const ref of chunk) {
+      await removeTaskFromDevice(ref.id);
+    }
   }
 }
 

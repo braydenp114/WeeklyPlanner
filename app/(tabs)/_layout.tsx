@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/Sidebar";
 import { HamburgerMenu } from "@/components/HamburgerMenu";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import NewTaskModal from "@/components/NewTaskModal";
+import SettingsModal from "@/components/SettingsModal";
 import { NavProvider, useNav } from "@/context/NavContext";
 
 function ResponsiveLayout() {
@@ -16,7 +17,8 @@ function ResponsiveLayout() {
   const { 
     isMobileMenuOpen, setIsMobileMenuOpen, isDesktop, 
     isNewTaskModalOpen, closeNewTaskModal, openNewTaskModal,
-    newTaskPrefillDate, newTaskPrefillHour, refreshTasks
+    newTaskPrefillDate, newTaskPrefillHour, refreshTasks,
+    isSettingsModalOpen, setIsSettingsModalOpen
   } = useNav();
   const pathname = usePathname();
 
@@ -45,6 +47,11 @@ function ResponsiveLayout() {
         onSaved={refreshTasks}
         prefillDate={newTaskPrefillDate}
         prefillHour={newTaskPrefillHour}
+      />
+
+      <SettingsModal
+        visible={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
       />
     </View>
   );

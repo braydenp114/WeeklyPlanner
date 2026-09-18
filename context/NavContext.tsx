@@ -16,6 +16,8 @@ interface NavContextType {
   editTaskData: Task | null;
   editTaskScope: 'this' | 'all';
   openEditTaskModal: (task: Task, scope?: 'this' | 'all') => void;
+  isSettingsModalOpen: boolean;
+  setIsSettingsModalOpen: (open: boolean) => void;
 }
 
 const NavContext = createContext<NavContextType>({
@@ -30,6 +32,8 @@ const NavContext = createContext<NavContextType>({
   editTaskData: null,
   editTaskScope: 'this',
   openEditTaskModal: () => {},
+  isSettingsModalOpen: false,
+  setIsSettingsModalOpen: () => {},
 });
 
 export function NavProvider({ children, isDesktop }: { children: ReactNode; isDesktop: boolean }) {
@@ -40,6 +44,7 @@ export function NavProvider({ children, isDesktop }: { children: ReactNode; isDe
   const [taskRefreshKey, setTaskRefreshKey] = useState(0);
   const [editTaskData, setEditTaskData] = useState<Task | null>(null);
   const [editTaskScope, setEditTaskScope] = useState<'this' | 'all'>('this');
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   const openNewTaskModal = (date?: Date, hour?: number) => {
     setEditTaskData(null);
@@ -76,6 +81,8 @@ export function NavProvider({ children, isDesktop }: { children: ReactNode; isDe
         editTaskData,
         editTaskScope,
         openEditTaskModal,
+        isSettingsModalOpen,
+        setIsSettingsModalOpen,
       }}
     >
       {children}

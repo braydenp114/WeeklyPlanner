@@ -38,7 +38,7 @@ export function Sidebar() {
   const theme = Colors[scheme];
   const pathname = usePathname();
   const { user, signOutUser } = useAuth();
-  const { openNewTaskModal } = useNav();
+  const { openNewTaskModal, setIsSettingsModalOpen } = useNav();
   const { preference, setPreference } = useThemePreference();
 
   return (
@@ -91,7 +91,11 @@ export function Sidebar() {
 
       <View style={styles.bottomSection}>
         {/* Settings */}
-        <TouchableOpacity style={styles.settingsItem} activeOpacity={0.7}>
+        <TouchableOpacity 
+          style={styles.settingsItem} 
+          activeOpacity={0.7}
+          onPress={() => setIsSettingsModalOpen(true)}
+        >
           <NavIcon name="gear" size={20} color={theme.textSecondary} />
           <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.textSecondary }]}>Settings</Text>
         </TouchableOpacity>

@@ -2,7 +2,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import { Platform } from 'react-native';
 import { getUpcomingLocationTasks, updateTask, getTaskById } from './tasksService';
-import { serverTimestamp } from 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
 
 const GEOFENCE_TASK_NAME = 'GEOFENCE_TASK_COMPLETION';
 
@@ -34,7 +34,7 @@ if (Platform.OS !== 'web') {
           await updateTask(taskId, {
             completed: true,
             completedBy: 'geofence',
-            completedAt: serverTimestamp(),
+            completedAt: Timestamp.now(),
           });
 
           // Re-sync geofences to remove this one and add the next upcoming ones

@@ -6,6 +6,7 @@ import { NavIcon, NavIconName } from './NavIcon';
 import { Colors, Typography, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
+import { useNav } from '@/context/NavContext';
 import { useThemePreference, ThemePreference } from '@/context/ThemePreferenceContext';
 
 const NAV_ITEMS = [
@@ -42,6 +43,7 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
   const theme = Colors[scheme];
   const pathname = usePathname();
   const { user, signOutUser } = useAuth();
+  const { setIsSettingsModalOpen } = useNav();
   const { preference, setPreference } = useThemePreference();
 
   const slideAnim = useMemo(() => new Animated.Value(-300), []);
@@ -127,7 +129,14 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
           </View>
 
           <View style={styles.bottomSection}>
-            <TouchableOpacity style={styles.settingsItem} activeOpacity={0.7}>
+            <TouchableOpacity 
+              style={styles.settingsItem} 
+              activeOpacity={0.7}
+              onPress={() => {
+                onClose();
+                setIsSettingsModalOpen(true);
+              }}
+            >
               <NavIcon name="gear" size={20} color={theme.textSecondary} />
               <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.textSecondary }]}>Settings</Text>
             </TouchableOpacity>

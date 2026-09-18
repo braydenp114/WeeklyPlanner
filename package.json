@@ -19,6 +19,7 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "expo": "~57.0.12",
+    "expo-calendar": "^57.0.4",
     "expo-constants": "^57.0.7",
     "expo-device": "~57.0.2",
     "expo-font": "~57.0.1",
