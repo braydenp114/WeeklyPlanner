@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   StyleSheet,
+  ScrollView,
   useWindowDimensions,
 } from "react-native";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
@@ -225,297 +226,306 @@ export function TaskPreviewPopover({
             !anchor && styles.centeredFallback,
           ]}
         >
-          {/* Action Row */}
-          <View style={styles.actionRow}>
-            <View style={{ flex: 1 }} />
-            <TouchableOpacity
-              onPress={() => onEdit(task)}
-              style={styles.iconBtn}
-            >
-              <MaterialIcons
-                name="edit"
-                size={20}
-                color={theme.onSurfaceVariant}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => onDelete(task)}
-              style={styles.iconBtn}
-            >
-              <MaterialIcons
-                name="delete"
-                size={20}
-                color={theme.onSurfaceVariant}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
-              <MaterialIcons
-                name="close"
-                size={20}
-                color={theme.onSurfaceVariant}
-              />
-            </TouchableOpacity>
-          </View>
+          <ScrollView
+            style={styles.popoverScroll}
+            showsVerticalScrollIndicator={true}
+          >
+            {/* Action Row */}
+            <View style={styles.actionRow}>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity
+                onPress={() => onEdit(task)}
+                style={styles.iconBtn}
+              >
+                <MaterialIcons
+                  name="edit"
+                  size={20}
+                  color={theme.onSurfaceVariant}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onDelete(task)}
+                style={styles.iconBtn}
+              >
+                <MaterialIcons
+                  name="delete"
+                  size={20}
+                  color={theme.onSurfaceVariant}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
+                <MaterialIcons
+                  name="close"
+                  size={20}
+                  color={theme.onSurfaceVariant}
+                />
+              </TouchableOpacity>
+            </View>
 
-          {/* Header Row: Checkbox + Color Dot + Title */}
-          <View style={styles.headerRow}>
-            <TouchableOpacity
-              onPress={toggleCompleted}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={styles.checkboxBtn}
-            >
-              <MaterialIcons
-                name={completed ? "check-box" : "check-box-outline-blank"}
-                size={22}
-                color={completed ? theme.primaryAction : theme.onSurfaceVariant}
+            {/* Header Row: Checkbox + Color Dot + Title */}
+            <View style={styles.headerRow}>
+              <TouchableOpacity
+                onPress={toggleCompleted}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.checkboxBtn}
+              >
+                <MaterialIcons
+                  name={completed ? "check-box" : "check-box-outline-blank"}
+                  size={22}
+                  color={
+                    completed ? theme.primaryAction : theme.onSurfaceVariant
+                  }
+                />
+              </TouchableOpacity>
+              <View
+                style={[styles.colorDot, { backgroundColor: task.colorHex }]}
               />
-            </TouchableOpacity>
-            <View
-              style={[styles.colorDot, { backgroundColor: task.colorHex }]}
-            />
-            <Text style={[styles.titleText, { color: theme.text }]}>
-              {task.title}
-            </Text>
-          </View>
+              <Text style={[styles.titleText, { color: theme.text }]}>
+                {task.title}
+              </Text>
+            </View>
 
-          {/* Time/Date */}
-          <View style={styles.row}>
-            <View style={styles.iconPlaceholder} />
-            <Text style={[styles.timeText, { color: theme.text }]}>
-              {formatTaskTime(task)}
-            </Text>
-          </View>
+            {/* Time/Date */}
+            <View style={styles.row}>
+              <View style={styles.iconPlaceholder} />
+              <Text style={[styles.timeText, { color: theme.text }]}>
+                {formatTaskTime(task)}
+              </Text>
+            </View>
 
-          {/* Location */}
-          {tData.location && (
+            {/* Location */}
+            {tData.location && (
+              <View style={styles.row}>
+                <MaterialIcons
+                  name="location-on"
+                  size={18}
+                  color={theme.onSurfaceVariant}
+                  style={styles.icon}
+                />
+                <Text style={[styles.detailText, { color: theme.text }]}>
+                  {tData.location}
+                </Text>
+              </View>
+            )}
+
+            {/* Weather */}
+            {weather && (
+              <View style={styles.row}>
+                <MaterialIcons
+                  name={weather.condition.icon as any}
+                  size={18}
+                  color={theme.onSurfaceVariant}
+                  style={styles.icon}
+                />
+                <Text style={[styles.detailText, { color: theme.text }]}>
+                  {weather.kind === "hourly"
+                    ? `${weather.temperature}°C · ${weather.condition.label}`
+                    : `${weather.temperatureMin}°–${weather.temperatureMax}°C · ${weather.condition.label}`}
+                </Text>
+              </View>
+            )}
+
+            {/* Description */}
+            {tData.description && (
+              <View style={styles.row}>
+                <MaterialIcons
+                  name="notes"
+                  size={18}
+                  color={theme.onSurfaceVariant}
+                  style={styles.icon}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[styles.detailText, { color: theme.text }]}
+                    numberOfLines={showFullDesc ? undefined : 3}
+                  >
+                    {tData.description}
+                  </Text>
+                  {tData.description.length > 100 && !showFullDesc && (
+                    <TouchableOpacity onPress={() => setShowFullDesc(true)}>
+                      <Text
+                        style={[
+                          styles.showMoreText,
+                          { color: theme.primaryAction },
+                        ]}
+                      >
+                        Show more
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* Checklist */}
+            {tData.hasChecklist && checklistItems.length > 0 && (
+              <View style={styles.row}>
+                <MaterialIcons
+                  name="checklist"
+                  size={18}
+                  color={theme.onSurfaceVariant}
+                  style={styles.icon}
+                />
+                <View style={{ flex: 1, gap: 8 }}>
+                  {checklistItems.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.checklistItemRow}
+                      onPress={() => toggleChecklistItem(item.id)}
+                      hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                    >
+                      <MaterialIcons
+                        name={
+                          item.completed
+                            ? "check-box"
+                            : "check-box-outline-blank"
+                        }
+                        size={18}
+                        color={
+                          item.completed
+                            ? theme.primaryAction
+                            : theme.onSurfaceVariant
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.detailText,
+                          { color: theme.text, flex: 1 },
+                        ]}
+                      >
+                        {item.text}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Notification */}
+            {tData.notification && (
+              <View style={styles.row}>
+                <MaterialIcons
+                  name="notifications"
+                  size={18}
+                  color={theme.onSurfaceVariant}
+                  style={styles.icon}
+                />
+                <Text style={[styles.detailText, { color: theme.text }]}>
+                  {tData.notification.type}
+                </Text>
+              </View>
+            )}
+
+            {/* Owner */}
             <View style={styles.row}>
               <MaterialIcons
-                name="location-on"
+                name="calendar-today"
                 size={18}
                 color={theme.onSurfaceVariant}
                 style={styles.icon}
               />
               <Text style={[styles.detailText, { color: theme.text }]}>
-                {tData.location}
+                {ownerName}
               </Text>
             </View>
-          )}
 
-          {/* Weather */}
-          {weather && (
-            <View style={styles.row}>
+            {/* Log what actually happened */}
+            <View style={[styles.row, { marginTop: 8 }]}>
               <MaterialIcons
-                name={weather.condition.icon as any}
-                size={18}
-                color={theme.onSurfaceVariant}
-                style={styles.icon}
-              />
-              <Text style={[styles.detailText, { color: theme.text }]}>
-                {weather.kind === "hourly"
-                  ? `${weather.temperature}°C · ${weather.condition.label}`
-                  : `${weather.temperatureMin}°–${weather.temperatureMax}°C · ${weather.condition.label}`}
-              </Text>
-            </View>
-          )}
-
-          {/* Description */}
-          {tData.description && (
-            <View style={styles.row}>
-              <MaterialIcons
-                name="notes"
+                name="flip"
                 size={18}
                 color={theme.onSurfaceVariant}
                 style={styles.icon}
               />
               <View style={{ flex: 1 }}>
-                <Text
-                  style={[styles.detailText, { color: theme.text }]}
-                  numberOfLines={showFullDesc ? undefined : 3}
-                >
-                  {tData.description}
-                </Text>
-                {tData.description.length > 100 && !showFullDesc && (
-                  <TouchableOpacity onPress={() => setShowFullDesc(true)}>
-                    <Text
-                      style={[
-                        styles.showMoreText,
-                        { color: theme.primaryAction },
-                      ]}
-                    >
-                      Show more
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Checklist */}
-          {tData.hasChecklist && checklistItems.length > 0 && (
-            <View style={styles.row}>
-              <MaterialIcons
-                name="checklist"
-                size={18}
-                color={theme.onSurfaceVariant}
-                style={styles.icon}
-              />
-              <View style={{ flex: 1, gap: 8 }}>
-                {checklistItems.map((item) => (
-                  <TouchableOpacity
-                    key={item.id}
-                    style={styles.checklistItemRow}
-                    onPress={() => toggleChecklistItem(item.id)}
-                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                  >
-                    <MaterialIcons
-                      name={
-                        item.completed ? "check-box" : "check-box-outline-blank"
-                      }
-                      size={18}
-                      color={
-                        item.completed
-                          ? theme.primaryAction
-                          : theme.onSurfaceVariant
-                      }
-                    />
+                {!showLogActual ? (
+                  <TouchableOpacity onPress={() => setShowLogActual(true)}>
                     <Text
                       style={[
                         styles.detailText,
-                        { color: theme.text, flex: 1 },
+                        { color: theme.primaryAction, fontWeight: "600" },
                       ]}
                     >
-                      {item.text}
+                      Log what actually happened
                     </Text>
                   </TouchableOpacity>
-                ))}
+                ) : (
+                  <View style={{ gap: 10 }}>
+                    <TouchableOpacity
+                      onPress={handleLogAsPlanned}
+                      disabled={savingActual}
+                      style={{
+                        backgroundColor: theme.primaryAction,
+                        borderRadius: 8,
+                        paddingVertical: 10,
+                        alignItems: "center",
+                        opacity: savingActual ? 0.6 : 1,
+                      }}
+                    >
+                      <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>
+                        Done as planned
+                      </Text>
+                    </TouchableOpacity>
+
+                    <Text
+                      style={[
+                        styles.detailText,
+                        { color: theme.textMuted, fontSize: 12 },
+                      ]}
+                    >
+                      Or, what did you do instead?
+                    </Text>
+                    <TextInput
+                      style={{
+                        borderWidth: 1,
+                        borderColor: theme.outlineVariant,
+                        borderRadius: 8,
+                        padding: 10,
+                        color: theme.text,
+                      }}
+                      placeholder="What actually happened"
+                      placeholderTextColor={theme.textMuted}
+                      value={substitutedText}
+                      onChangeText={setSubstitutedText}
+                    />
+                    <TextInput
+                      style={{
+                        borderWidth: 1,
+                        borderColor: theme.outlineVariant,
+                        borderRadius: 8,
+                        padding: 10,
+                        color: theme.text,
+                        minHeight: 60,
+                      }}
+                      placeholder="Optional note"
+                      placeholderTextColor={theme.textMuted}
+                      value={actualNoteText}
+                      onChangeText={setActualNoteText}
+                      multiline
+                    />
+                    <TouchableOpacity
+                      onPress={handleLogDifferent}
+                      disabled={savingActual || !substitutedText.trim()}
+                      style={{
+                        backgroundColor: theme.surfaceContainer,
+                        borderWidth: 1,
+                        borderColor: theme.outlineVariant,
+                        borderRadius: 8,
+                        paddingVertical: 10,
+                        alignItems: "center",
+                        opacity:
+                          savingActual || !substitutedText.trim() ? 0.6 : 1,
+                      }}
+                    >
+                      <Text style={{ color: theme.text, fontWeight: "600" }}>
+                        Save
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </View>
             </View>
-          )}
-
-          {/* Notification */}
-          {tData.notification && (
-            <View style={styles.row}>
-              <MaterialIcons
-                name="notifications"
-                size={18}
-                color={theme.onSurfaceVariant}
-                style={styles.icon}
-              />
-              <Text style={[styles.detailText, { color: theme.text }]}>
-                {tData.notification.type}
-              </Text>
-            </View>
-          )}
-
-          {/* Owner */}
-          <View style={styles.row}>
-            <MaterialIcons
-              name="calendar-today"
-              size={18}
-              color={theme.onSurfaceVariant}
-              style={styles.icon}
-            />
-            <Text style={[styles.detailText, { color: theme.text }]}>
-              {ownerName}
-            </Text>
-          </View>
-
-          {/* Log what actually happened */}
-          <View style={[styles.row, { marginTop: 8 }]}>
-            <MaterialIcons
-              name="flip"
-              size={18}
-              color={theme.onSurfaceVariant}
-              style={styles.icon}
-            />
-            <View style={{ flex: 1 }}>
-              {!showLogActual ? (
-                <TouchableOpacity onPress={() => setShowLogActual(true)}>
-                  <Text
-                    style={[
-                      styles.detailText,
-                      { color: theme.primaryAction, fontWeight: "600" },
-                    ]}
-                  >
-                    Log what actually happened
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <View style={{ gap: 10 }}>
-                  <TouchableOpacity
-                    onPress={handleLogAsPlanned}
-                    disabled={savingActual}
-                    style={{
-                      backgroundColor: theme.primaryAction,
-                      borderRadius: 8,
-                      paddingVertical: 10,
-                      alignItems: "center",
-                      opacity: savingActual ? 0.6 : 1,
-                    }}
-                  >
-                    <Text style={{ color: "#FFFFFF", fontWeight: "600" }}>
-                      Done as planned
-                    </Text>
-                  </TouchableOpacity>
-
-                  <Text
-                    style={[
-                      styles.detailText,
-                      { color: theme.textMuted, fontSize: 12 },
-                    ]}
-                  >
-                    Or, what did you do instead?
-                  </Text>
-                  <TextInput
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.outlineVariant,
-                      borderRadius: 8,
-                      padding: 10,
-                      color: theme.text,
-                    }}
-                    placeholder="What actually happened"
-                    placeholderTextColor={theme.textMuted}
-                    value={substitutedText}
-                    onChangeText={setSubstitutedText}
-                  />
-                  <TextInput
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.outlineVariant,
-                      borderRadius: 8,
-                      padding: 10,
-                      color: theme.text,
-                      minHeight: 60,
-                    }}
-                    placeholder="Optional note"
-                    placeholderTextColor={theme.textMuted}
-                    value={actualNoteText}
-                    onChangeText={setActualNoteText}
-                    multiline
-                  />
-                  <TouchableOpacity
-                    onPress={handleLogDifferent}
-                    disabled={savingActual || !substitutedText.trim()}
-                    style={{
-                      backgroundColor: theme.surfaceContainer,
-                      borderWidth: 1,
-                      borderColor: theme.outlineVariant,
-                      borderRadius: 8,
-                      paddingVertical: 10,
-                      alignItems: "center",
-                      opacity:
-                        savingActual || !substitutedText.trim() ? 0.6 : 1,
-                    }}
-                  >
-                    <Text style={{ color: theme.text, fontWeight: "600" }}>
-                      Save
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -549,9 +559,12 @@ const styles = StyleSheet.create({
     elevation: 20,
     padding: 16,
     paddingTop: 8,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
+    height: 500,
+    overflow: "hidden",
+  },
+  popoverScroll: {
+    flex: 1,
+    minHeight: 0,
   },
   centeredFallback: {
     alignSelf: "center",

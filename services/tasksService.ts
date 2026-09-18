@@ -466,3 +466,50 @@ export async function logTaskActual(id: string, params: LogActualParams): Promis
     completed: params.status === 'as_planned' ? true : false,
   });
 }
+
+export interface CategoryReviewStats {
+  category: string;
+  plannedHours: number;
+  completedAsPlannedHours: number;
+  substitutedCount: number;
+  unloggedCount: number;
+}
+
+/**
+ * Aggregates a set of tasks (typically one week's worth) into per-category
+ * planned-vs-actual stats for the Weekly Review screen.
+ */
+export function calculateWeeklyReview(tasks: Task[]): CategoryReviewStats[] {
+  const statsByCategory = new Map<string, CategoryReviewStats>();
+
+  for (const task of tasks) {
+    if (task.isDeadline) continue; // deadlines aren't schedulable time, skip them
+
+    const category = task.category || 'Uncategorized';
+    if (!statsByCategory.has(category)) {
+      statsByCategory.set(category, {
+        category,
+        plannedHours: 0,
+        completedAsPlannedHours: 0,
+        substitutedCount: 0,
+        unloggedCount: 0,
+      });
+    }
+    const stats = statsByCategory.get(category)!;
+
+    const durationHours =
+      (task.endDate.toDate().getTime() - task.startDate.toDate().getTime()) / (1000 * 60 * 60);
+    stats.plannedHours += durationHours;
+
+    if (task.actualStatus === 'as_planned') {
+      stats.completedAsPlannedHours += durationHours;
+    } else if (task.actualStatus === 'different') {
+      stats.substitutedCount += 1;
+    } else {
+      const isPast = task.endDate.toDate().getTime() < Date.now();
+      if (isPast) stats.unloggedCount += 1;
+    }
+  }
+
+  return Array.from(statsByCategory.values());
+}
