@@ -59,6 +59,8 @@ function getStartOfWeek(date: Date) {
 
 type ViewMode = 'Day' | 'Week' | '7 Days' | 'Month';
 
+type CompletionFilter = 'All' | 'Incomplete' | 'Completed';
+
 function getGridDates(viewMode: ViewMode, offset: number) {
   const targetDate = new Date();
 
@@ -305,6 +307,8 @@ export default function WeeklyGrid() {
   const [viewMode, setViewMode] = useState<ViewMode>('Week');
   const [dateOffset, setDateOffset] = useState(0);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [completionFilter, setCompletionFilter] = useState<CompletionFilter>('All');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const [gridHeight, setGridHeight] = useState(0);
 
@@ -464,13 +468,32 @@ export default function WeeklyGrid() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeStart.getTime(), rangeEnd.getTime(), taskRefreshKey, authLoading, user]);
 
+  // ── Completion filter ──
+  const visibleTasks = useMemo(() => {
+    if (completionFilter === 'All') return tasks;
+    return tasks.filter((task) =>
+      completionFilter === 'Completed'
+        ? !!task.originalTaskData.completed
+        : !task.originalTaskData.completed,
+    );
+  }, [tasks, completionFilter]);
+
+  const visibleAllDayTasks = useMemo(() => {
+    if (completionFilter === 'All') return allDayTasks;
+    return allDayTasks.filter((task) =>
+      completionFilter === 'Completed'
+        ? !!task.originalTaskData.completed
+        : !task.originalTaskData.completed,
+    );
+  }, [allDayTasks, completionFilter]);
+
   // ── Layout Algorithm for Staggered Events ──
   const layoutMap = useMemo(() => {
     const map = new Map<string, { col: number; maxCols: number }>();
-    
+
     // Process day by day
     for (const dayIdx of [0, 1, 2, 3, 4, 5, 6]) {
-      const dayTasks = tasks.filter(t => t.dayIndex === dayIdx);
+      const dayTasks = visibleTasks.filter(t => t.dayIndex === dayIdx);
       const sorted = [...dayTasks].sort((a, b) => a.startHour - b.startHour || b.durationHours - a.durationHours);
       
       let currentCluster: TaskItem[] = [];
@@ -515,7 +538,7 @@ export default function WeeklyGrid() {
       }
     }
     return map;
-  }, [tasks]);
+  }, [visibleTasks]);
 
 
   return (
@@ -576,6 +599,34 @@ export default function WeeklyGrid() {
           >
             <Text style={[styles.arrowText, { color: theme.text }]}>›</Text>
           </TouchableOpacity>
+
+          <View style={styles.filterWrapper}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => setIsFilterOpen(!isFilterOpen)}
+              style={[styles.dropdownButton, { backgroundColor: theme.surfaceContainer, borderColor: theme.outlineVariant }]}
+            >
+              <MaterialIcons name="filter-list" size={16} color={theme.onSurfaceVariant} />
+              <Text style={[styles.dropdownText, { color: theme.text }]}>{completionFilter}</Text>
+              <MaterialIcons name="arrow-drop-down" size={18} color={theme.onSurfaceVariant} />
+            </TouchableOpacity>
+            {isFilterOpen && (
+              <View style={[styles.dropdownMenu, { backgroundColor: theme.surfaceContainerHighest, borderColor: theme.outlineVariant }]}>
+                {(['All', 'Incomplete', 'Completed'] as CompletionFilter[]).map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={styles.dropdownMenuItem}
+                    onPress={() => {
+                      setCompletionFilter(option);
+                      setIsFilterOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.dropdownMenuItemText, { color: theme.text }]}>{option}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={{ position: 'relative', zIndex: 50 }}>
@@ -622,7 +673,7 @@ export default function WeeklyGrid() {
         <MonthlyGridView 
           dates={weekDates} 
           currentDate={currentDate} 
-          tasks={[...tasks, ...allDayTasks]} 
+          tasks={[...visibleTasks, ...visibleAllDayTasks]}
           onDayClick={(date) => {
             const today = new Date();
             today.setHours(0,0,0,0);
@@ -702,14 +753,14 @@ export default function WeeklyGrid() {
             </View>
 
             {/* All-Day Tasks Banner */}
-            {allDayTasks.length > 0 && (
+            {visibleAllDayTasks.length > 0 && (
               <View style={[styles.allDayRow, { borderColor: theme.outlineVariant }]}>
                 <View style={[styles.allDayLabel, { borderColor: theme.outlineVariant }]}>
                   <Text style={[styles.allDayLabelText, { color: theme.textMuted }]}>ALL DAY</Text>
                 </View>
                 <View style={styles.allDayColumns}>
                   {weekDates.map((date, dayIdx) => {
-                    const dayAllDayTasks = allDayTasks.filter((t) => t.dayIndex === dayIdx);
+                    const dayAllDayTasks = visibleAllDayTasks.filter((t) => t.dayIndex === dayIdx);
                     return (
                       <View
                         key={`allday-${date.toISOString()}`}
@@ -814,7 +865,7 @@ export default function WeeklyGrid() {
                     )}
 
                     {/* Render Task Cards belonging to this day */}
-                    {tasks
+                    {visibleTasks
                       .filter((task) => task.dayIndex === dayIdx)
                       .map((task) => {
                         const topOffset = task.startHour * rowHeight;
@@ -1177,6 +1228,11 @@ const styles = StyleSheet.create({
     right: 0,
     height: 2,
     zIndex: 10,
+  },
+  filterWrapper: {
+    position: 'relative',
+    zIndex: 60,
+    marginLeft: 4,
   },
   dropdownButton: {
     flexDirection: 'row',
