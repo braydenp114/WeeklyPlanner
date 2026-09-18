@@ -57,6 +57,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     console.log('[AuthContext] Subscribing to onAuthStateChanged with auth:', !!auth);
     let unsubscribe: () => void = () => {};
     try {

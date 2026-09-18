@@ -131,6 +131,8 @@ export type TaskItem = {
   isAllDay: boolean;
   /** The full task data, used for popovers and edit functionality. */
   originalTaskData: Task;
+  tag?: string;
+  reminderMinutesBefore?: number | null;
 };
 
 // ─── Mapping: ExpandedTask → TaskItem[] ─────────────────────────────────────

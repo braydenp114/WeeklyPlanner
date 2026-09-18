@@ -1,10 +1,12 @@
 import { Stack, DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { useEffect } from 'react';
 
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemePreferenceProvider } from '@/context/ThemePreferenceContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { requestNotificationPermission } from '@/config/notifications';
 
 import React, { useEffect } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
@@ -24,6 +26,9 @@ export default function RootLayout() {
 
 function AppContent() {
   const colorScheme = useColorScheme();
+  useEffect(() => {
+    requestNotificationPermission();
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
