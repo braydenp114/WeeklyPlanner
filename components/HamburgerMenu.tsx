@@ -1,16 +1,36 @@
 import React, { useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, TouchableWithoutFeedback, Image } from 'react-native';
 import { usePathname, router } from 'expo-router';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { NavIcon, NavIconName } from './NavIcon';
 import { Colors, Typography, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
+import { useThemePreference, ThemePreference } from '@/context/ThemePreferenceContext';
 
 const NAV_ITEMS = [
   { name: 'Weekly Grid', icon: 'gridview', route: '/' },
   { name: 'Unscheduled', icon: 'lists', route: '/explore' },
   { name: 'Analytics', icon: 'analytics', route: '/analytics' },
 ];
+
+const NEXT_PREFERENCE: Record<ThemePreference, ThemePreference> = {
+  system: 'light',
+  light: 'dark',
+  dark: 'system',
+};
+
+const PREFERENCE_ICON: Record<ThemePreference, keyof typeof MaterialIcons.glyphMap> = {
+  system: 'brightness-auto',
+  light: 'light-mode',
+  dark: 'dark-mode',
+};
+
+const PREFERENCE_LABEL: Record<ThemePreference, string> = {
+  system: 'Match System',
+  light: 'Light Mode',
+  dark: 'Dark Mode',
+};
 
 interface HamburgerMenuProps {
   visible: boolean;
@@ -22,6 +42,7 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
   const theme = Colors[scheme];
   const pathname = usePathname();
   const { user, signOutUser } = useAuth();
+  const { preference, setPreference } = useThemePreference();
 
   const slideAnim = useMemo(() => new Animated.Value(-300), []);
 
@@ -109,6 +130,17 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
             <TouchableOpacity style={styles.settingsItem} activeOpacity={0.7}>
               <NavIcon name="gear" size={20} color={theme.textSecondary} />
               <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.textSecondary }]}>Settings</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.settingsItem}
+              activeOpacity={0.7}
+              onPress={() => setPreference(NEXT_PREFERENCE[preference])}
+            >
+              <MaterialIcons name={PREFERENCE_ICON[preference]} size={20} color={theme.textSecondary} />
+              <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.textSecondary }]}>
+                {PREFERENCE_LABEL[preference]}
+              </Text>
             </TouchableOpacity>
 
 
