@@ -60,9 +60,7 @@ export default function AnalyticsScreen() {
       style={[styles.container, { backgroundColor: theme.background }]}
     >
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[styles.title, { color: theme.text }]}>
-          This Week's Review
-        </Text>
+        <Text style={[styles.title, { color: theme.text }]}>This Week&apos;s Review</Text>
 
         {loading && (
           <ActivityIndicator
