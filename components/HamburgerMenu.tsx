@@ -1,35 +1,49 @@
-import React, { useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, TouchableWithoutFeedback, Image } from 'react-native';
-import { usePathname, router } from 'expo-router';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-import { NavIcon, NavIconName } from './NavIcon';
-import { Colors, Typography, RoundedGeometry } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAuth } from '@/context/AuthContext';
-import { useThemePreference, ThemePreference } from '@/context/ThemePreferenceContext';
+import React, { useEffect, useMemo } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Modal,
+  Animated,
+  TouchableWithoutFeedback,
+  Image,
+} from "react-native";
+import { usePathname, router } from "expo-router";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { NavIcon, NavIconName } from "./NavIcon";
+import { Colors, Typography, RoundedGeometry } from "@/constants/theme";
+import { useColorScheme } from "@/hooks/use-color-scheme";
+import { useAuth } from "@/context/AuthContext";
+import {
+  useThemePreference,
+  ThemePreference,
+} from "@/context/ThemePreferenceContext";
 
 const NAV_ITEMS = [
-  { name: 'Weekly Grid', icon: 'gridview', route: '/' },
-  { name: 'Unscheduled', icon: 'lists', route: '/explore' },
-  { name: 'Analytics', icon: 'analytics', route: '/analytics' },
+  { name: "Weekly Grid", icon: "gridview", route: "/" },
+  { name: "Analytics", icon: "analytics", route: "/analytics" },
 ];
 
 const NEXT_PREFERENCE: Record<ThemePreference, ThemePreference> = {
-  system: 'light',
-  light: 'dark',
-  dark: 'system',
+  system: "light",
+  light: "dark",
+  dark: "system",
 };
 
-const PREFERENCE_ICON: Record<ThemePreference, keyof typeof MaterialIcons.glyphMap> = {
-  system: 'brightness-auto',
-  light: 'light-mode',
-  dark: 'dark-mode',
+const PREFERENCE_ICON: Record<
+  ThemePreference,
+  keyof typeof MaterialIcons.glyphMap
+> = {
+  system: "brightness-auto",
+  light: "light-mode",
+  dark: "dark-mode",
 };
 
 const PREFERENCE_LABEL: Record<ThemePreference, string> = {
-  system: 'Match System',
-  light: 'Light Mode',
-  dark: 'Dark Mode',
+  system: "Match System",
+  light: "Light Mode",
+  dark: "Dark Mode",
 };
 
 interface HamburgerMenuProps {
@@ -38,7 +52,7 @@ interface HamburgerMenuProps {
 }
 
 export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
+  const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[scheme];
   const pathname = usePathname();
   const { user, signOutUser } = useAuth();
@@ -63,7 +77,12 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
   }, [visible, slideAnim]);
 
   return (
-    <Modal visible={visible} transparent={true} animationType="none" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType="none"
+      onRequestClose={onClose}
+    >
       <View style={styles.overlayContainer}>
         {/* Scrim Backdrop */}
         <TouchableWithoutFeedback onPress={onClose}>
@@ -77,13 +96,15 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
             {
               backgroundColor: theme.surface,
               borderRightColor: theme.outlineVariant,
-              transform: [{ translateX: slideAnim }]
-            }
+              transform: [{ translateX: slideAnim }],
+            },
           ]}
         >
           <View style={styles.topSection}>
             <View style={styles.header}>
-              <Text style={[Typography.headlineMobile, { color: theme.text }]}>Menu</Text>
+              <Text style={[Typography.headlineMobile, { color: theme.text }]}>
+                Menu
+              </Text>
               <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
                 <Text style={{ color: theme.text, fontSize: 24 }}>×</Text>
               </TouchableOpacity>
@@ -98,7 +119,7 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
                     style={[
                       styles.navItem,
                       { borderRadius: RoundedGeometry.default },
-                      isActive && { backgroundColor: theme.primaryAction }
+                      isActive && { backgroundColor: theme.primaryAction },
                     ]}
                     onPress={() => {
                       onClose();
@@ -109,13 +130,16 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
                     <NavIcon
                       name={item.icon as NavIconName}
                       size={20}
-                      color={isActive ? '#FFFFFF' : theme.textSecondary}
+                      color={isActive ? "#FFFFFF" : theme.textSecondary}
                     />
                     <Text
                       style={[
                         styles.navText,
                         Typography.bodyMd,
-                        { color: isActive ? '#FFFFFF' : theme.textSecondary, fontWeight: isActive ? '600' : '400' }
+                        {
+                          color: isActive ? "#FFFFFF" : theme.textSecondary,
+                          fontWeight: isActive ? "600" : "400",
+                        },
                       ]}
                     >
                       {item.name}
@@ -129,7 +153,15 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
           <View style={styles.bottomSection}>
             <TouchableOpacity style={styles.settingsItem} activeOpacity={0.7}>
               <NavIcon name="gear" size={20} color={theme.textSecondary} />
-              <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.textSecondary }]}>Settings</Text>
+              <Text
+                style={[
+                  styles.settingsText,
+                  Typography.bodyMd,
+                  { color: theme.textSecondary },
+                ]}
+              >
+                Settings
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -137,29 +169,60 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
               activeOpacity={0.7}
               onPress={() => setPreference(NEXT_PREFERENCE[preference])}
             >
-              <MaterialIcons name={PREFERENCE_ICON[preference]} size={20} color={theme.textSecondary} />
-              <Text style={[styles.settingsText, Typography.bodyMd, { color: theme.textSecondary }]}>
+              <MaterialIcons
+                name={PREFERENCE_ICON[preference]}
+                size={20}
+                color={theme.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.settingsText,
+                  Typography.bodyMd,
+                  { color: theme.textSecondary },
+                ]}
+              >
                 {PREFERENCE_LABEL[preference]}
               </Text>
             </TouchableOpacity>
 
-
-
-            <View style={[styles.divider, { backgroundColor: theme.outlineVariant }]} />
+            <View
+              style={[
+                styles.divider,
+                { backgroundColor: theme.outlineVariant },
+              ]}
+            />
 
             <View style={styles.profileSection}>
               {user?.photoURL ? (
                 <Image source={{ uri: user.photoURL }} style={styles.avatar} />
               ) : (
-                <View style={[styles.avatar, { backgroundColor: theme.primaryAction }]}>
-                  <Text style={[styles.avatarText, Typography.labelMd, { color: '#FFFFFF' }]}>
-                    {user?.email ? user.email.charAt(0).toUpperCase() : 'U'}
+                <View
+                  style={[
+                    styles.avatar,
+                    { backgroundColor: theme.primaryAction },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.avatarText,
+                      Typography.labelMd,
+                      { color: "#FFFFFF" },
+                    ]}
+                  >
+                    {user?.email ? user.email.charAt(0).toUpperCase() : "U"}
                   </Text>
                 </View>
               )}
               <View style={styles.profileInfo}>
-                <Text style={[styles.profileName, Typography.bodySm, { color: theme.text }]} numberOfLines={1}>
-                  {user?.email || 'Guest'}
+                <Text
+                  style={[
+                    styles.profileName,
+                    Typography.bodySm,
+                    { color: theme.text },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {user?.email || "Guest"}
                 </Text>
                 <TouchableOpacity
                   activeOpacity={0.7}
@@ -169,12 +232,18 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
                       onClose();
                     } else {
                       onClose();
-                      router.push('/login');
+                      router.push("/login");
                     }
                   }}
                 >
-                  <Text style={[styles.profilePlan, Typography.labelSm, { color: theme.primaryAction }]}>
-                    {user ? 'Sign Out' : 'Sign In'}
+                  <Text
+                    style={[
+                      styles.profilePlan,
+                      Typography.labelSm,
+                      { color: theme.primaryAction },
+                    ]}
+                  >
+                    {user ? "Sign Out" : "Sign In"}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -189,25 +258,25 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
 const styles = StyleSheet.create({
   overlayContainer: {
     flex: 1,
-    flexDirection: 'row',
+    flexDirection: "row",
   },
   scrim: {
-    position: 'absolute',
+    position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
   menuPanel: {
     width: 280,
-    height: '100%',
+    height: "100%",
     borderRightWidth: 1,
     paddingVertical: 24,
     paddingHorizontal: 16,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
     elevation: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 4, height: 0 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -216,9 +285,9 @@ const styles = StyleSheet.create({
     gap: 24,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 8,
   },
   closeBtn: {
@@ -228,8 +297,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   navItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 12,
     paddingHorizontal: 12,
     gap: 12,
@@ -241,8 +310,8 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   settingsItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 8,
     paddingHorizontal: 12,
     gap: 12,
@@ -252,12 +321,12 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    width: '100%',
+    width: "100%",
     marginVertical: 8,
   },
   profileSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     paddingHorizontal: 8,
   },
@@ -265,20 +334,20 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarText: {
-    fontWeight: '700',
+    fontWeight: "700",
   },
   profileInfo: {
     flex: 1,
   },
   profileName: {
-    fontWeight: '600',
+    fontWeight: "600",
     marginBottom: 2,
   },
   profilePlan: {
     fontSize: 10,
-  }
+  },
 });
