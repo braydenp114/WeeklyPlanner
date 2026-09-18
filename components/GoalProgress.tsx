@@ -12,7 +12,7 @@ export function GoalProgress({ goal, tasks }: Props) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{goal.tag}</Text>
+      <Text style={styles.title}>{goal.category}</Text>
       <Text>{goal.targetHours}h target</Text>
       <Text>{remaining}h pending</Text>
     </View>
