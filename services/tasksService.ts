@@ -57,6 +57,12 @@ export interface Task {
   seriesId?: string;
   /** Whether this task itself is marked as done. */
   completed?: boolean;
+  /** When this task was marked as completed */
+  completedAt?: Timestamp | null;
+  /** How this task was marked completed */
+  completedBy?: 'manual' | 'geofence' | null;
+  /** Radius in meters for geofence (default 150) */
+  geofenceRadiusMeters?: number;
   /** Whether this task has an attached sub-item checklist. */
   hasChecklist?: boolean;
   /** Sub-items shown when hasChecklist is true. */
@@ -512,4 +518,47 @@ export function calculateWeeklyReview(tasks: Task[]): CategoryReviewStats[] {
   }
 
   return Array.from(statsByCategory.values());
+}
+
+/**
+ * Retrieves all incomplete, location-tagged tasks (and next occurrences of recurring tasks)
+ * scheduled within the next 48 hours. Used for syncing geofence regions.
+ */
+export async function getUpcomingLocationTasks(): Promise<Task[]> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const now = new Date();
+  const lookahead = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+  // We query for tasks starting before our lookahead window ends
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('startDate', '<=', Timestamp.fromDate(lookahead))
+  );
+
+  const snapshot = await getDocs(q);
+  const tasks: Task[] = [];
+  
+  snapshot.forEach((docSnap) => {
+    const task = { id: docSnap.id, ...docSnap.data() } as Task;
+    
+    // Only location-tagged tasks that aren't completed
+    if (!task.location || !task.latitude || !task.longitude) return;
+    if (task.completed) return;
+    
+    // Skip if it ended in the past
+    if (task.endDate.toDate() < now) return;
+
+    // We have a composite index on ownerId ASC, startDate ASC, so we can't easily 
+    // filter `endDate >= now` on the server at the same time. The client-side filter is fine.
+    
+    tasks.push(task);
+  });
+
+  // Sort by start date to get the most imminent ones
+  tasks.sort((a, b) => a.startDate.toMillis() - b.startDate.toMillis());
+
+  return tasks;
 }

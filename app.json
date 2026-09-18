@@ -9,7 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -49,6 +55,14 @@
         "@react-native-google-signin/google-signin",
         {
           "iosUrlScheme": "com.googleusercontent.apps.304847390966-6f5far1pc5ogu692ga1qvrnasdq24bpd"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "WeeklyPlanner uses your location to automatically mark tasks as completed when you arrive.",
+          "locationAlwaysPermission": "WeeklyPlanner uses your location in the background to automatically mark tasks as completed when you arrive.",
+          "isAndroidBackgroundLocationEnabled": true
         }
       ]
     ],

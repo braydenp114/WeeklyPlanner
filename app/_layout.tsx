@@ -7,6 +7,8 @@ import { ThemePreferenceProvider } from '@/context/ThemePreferenceContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import React, { useEffect } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
+import { syncAllGeofences } from '@/services/geofenceService';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -38,6 +40,21 @@ function AppContent() {
         window.removeEventListener('unhandledrejection', handleRejection);
       };
     }
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        syncAllGeofences().catch(console.error);
+      }
+    });
+
+    // Also sync on initial mount
+    syncAllGeofences().catch(console.error);
+
+    return () => {
+      subscription.remove();
+    };
   }, []);
 
   return (

@@ -108,7 +108,7 @@ export function TaskPreviewPopover({
     const next = !completed;
     setCompleted(next);
     try {
-      await updateTask(task.originalTaskId, { completed: next });
+      await updateTask(task.originalTaskId, { completed: next, completedBy: 'manual' });
       onChanged?.();
     } catch {
       setCompleted(!next);
@@ -280,9 +280,19 @@ export function TaskPreviewPopover({
               <View
                 style={[styles.colorDot, { backgroundColor: task.colorHex }]}
               />
-              <Text style={[styles.titleText, { color: theme.text }]}>
-                {task.title}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.titleText, { color: theme.text, textDecorationLine: completed ? 'line-through' : 'none' }]}>
+                  {task.title}
+                </Text>
+                {completed && tData.completedBy === 'geofence' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4, gap: 4 }}>
+                    <MaterialIcons name="auto-awesome" size={14} color={theme.primaryAction} />
+                    <Text style={{ fontSize: 12, color: theme.primaryAction }}>
+                      Completed automatically on arrival
+                    </Text>
+                  </View>
+                )}
+              </View>
             </View>
 
             {/* Time/Date */}

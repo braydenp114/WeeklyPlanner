@@ -138,7 +138,8 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
                     <View style={styles.eventsContainer}>
                       {visibleTasks.map(task => {
                         const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
-                        const pastDotStyle = getPastEventStyle(isPast, task.colorHex);
+                        const isCompleted = !!task.originalTaskData.completed;
+                        const pastDotStyle = getPastEventStyle(isPast || isCompleted, task.colorHex);
                         
                         return (
                           <HoverableTaskCard 

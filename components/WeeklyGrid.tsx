@@ -717,7 +717,8 @@ export default function WeeklyGrid() {
                       >
                         {dayAllDayTasks.map((task) => {
                           const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
-                          const pastStyles = getPastEventStyle(isPast, task.colorHex);
+                          const isCompleted = !!task.originalTaskData.completed;
+                          const pastStyles = getPastEventStyle(isPast || isCompleted, task.colorHex);
                           
                           return (
                             <HoverableTaskCard
@@ -830,7 +831,8 @@ export default function WeeklyGrid() {
                         const baseZIndex = col + 1;
                         
                         const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
-                        const pastStyles = getPastEventStyle(isPast, task.colorHex);
+                        const isCompleted = !!task.originalTaskData.completed;
+                        const pastStyles = getPastEventStyle(isPast || isCompleted, task.colorHex);
 
                         return (
                           <HoverableTaskCard

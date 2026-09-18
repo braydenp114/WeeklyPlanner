@@ -18,7 +18,10 @@ import {
   Platform,
   Animated,
   KeyboardAvoidingView,
+  Alert,
 } from "react-native";
+import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Timestamp } from "firebase/firestore";
 import {
@@ -49,6 +52,7 @@ import {
   LocationAutocomplete,
   LocationCoordinates,
 } from "./ui/LocationAutocomplete";
+import { syncAllGeofences } from "@/services/geofenceService";
 
 // ─── Notification Presets ────────────────────────────────────────────────────
 const NOTIFICATION_OPTIONS = [
@@ -604,6 +608,48 @@ export default function NewTaskModal({
       } else {
         await createTask(taskData);
       }
+
+      // ── Geofence JIT Permission Prompt ──
+      if (Platform.OS !== "web" && locationCoordinates?.latitude && locationCoordinates?.longitude) {
+        try {
+          const hasPrompted = await AsyncStorage.getItem("hasPromptedGeofence");
+          if (!hasPrompted) {
+            await new Promise<void>((resolve) => {
+              Alert.alert(
+                "Enable Automatic Task Completion?",
+                "WeeklyPlanner uses your background location to automatically mark your tasks as 'Completed' when you arrive at their location during the scheduled time. This feature only tracks locations you specifically add to tasks, and you can disable it at any time in your device settings.",
+                [
+                  {
+                    text: "Not Now",
+                    style: "cancel",
+                    onPress: async () => {
+                      await AsyncStorage.setItem("hasPromptedGeofence", "true");
+                      resolve();
+                    },
+                  },
+                  {
+                    text: "Continue to Permissions",
+                    onPress: async () => {
+                      await AsyncStorage.setItem("hasPromptedGeofence", "true");
+                      const fg = await Location.requestForegroundPermissionsAsync();
+                      if (fg.granted) {
+                        await Location.requestBackgroundPermissionsAsync();
+                      }
+                      resolve();
+                    },
+                  },
+                ],
+                { cancelable: false }
+              );
+            });
+          }
+        } catch (err) {
+          console.error("Geofence prompt error:", err);
+        }
+      }
+      
+      // Trigger geofence sync
+      syncAllGeofences().catch(console.error);
 
       onSaved?.();
       onClose();
