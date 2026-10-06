@@ -73,6 +73,8 @@ export interface Task {
   substitutedActivity?: string | null;
   /** Optional diary-style note about how the task went. */
   actualNote?: string | null;
+  /** Set automatically when a recurring task is saved, so its occurrences count towards a streak. */
+  streakEligible?: boolean;
 }
 
 export type CreateTaskData = Omit<Task, 'id' | 'ownerId' | 'createdAt'>;
@@ -92,6 +94,8 @@ export async function createTask(data: CreateTaskData): Promise<string> {
     ...data,
     ownerId: currentUser.uid,
     createdAt: serverTimestamp(),
+    // Recurring tasks become streak-eligible on save, with no extra setup from the user
+    streakEligible: data.recurrence !== 'none',
   };
 
   if (data.recurrence === 'none') {
@@ -300,6 +304,28 @@ export async function updateSeries(seriesId: string, data: UpdateTaskData, timeD
     }
     await batch.commit();
   }
+}
+
+/**
+ * Retrieves every occurrence in a recurring series, used for streak tracking.
+ * Uses the same (ownerId, seriesId) query as updateSeries and deleteSeries.
+ */
+export async function getSeriesOccurrences(seriesId: string): Promise<Task[]> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('seriesId', '==', seriesId)
+  );
+
+  const snapshot = await getDocs(q);
+  const occurrences: Task[] = [];
+  snapshot.forEach((docSnap) => {
+    occurrences.push({ id: docSnap.id, ...docSnap.data() } as Task);
+  });
+  return occurrences;
 }
 
 /**
