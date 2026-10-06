@@ -16,6 +16,7 @@ import {
   calculateWeeklyReview,
   CategoryReviewStats,
 } from "@/services/tasksService";
+import { calculateGoalGap } from "@/utils/weekly-goal";
 
 function getStartOfWeek(date: Date) {
   const result = new Date(date);
@@ -81,9 +82,7 @@ export default function AnalyticsScreen() {
         {!loading &&
           stats.map((s) => {
             const targetText = goalTargets[s.category] ?? "";
-            const target = parseFloat(targetText);
-            const hasGoal = !isNaN(target) && target > 0;
-            const pending = hasGoal ? Math.max(target - s.plannedHours, 0) : null;
+            const gap = calculateGoalGap(parseFloat(targetText), s.plannedHours);
 
             return (
               <View
@@ -129,9 +128,14 @@ export default function AnalyticsScreen() {
                     placeholderTextColor={theme.textMuted}
                   />
                 </View>
-                {pending !== null && (
-                  <Text style={[styles.pendingText, { color: theme.primaryAction }]}>
-                    {pending.toFixed(1)}h pending this week
+                {gap !== null && gap > 0 && (
+                  <Text style={[styles.pendingText, { color: theme.error }]}>
+                    {gap.toFixed(1)}h gap: schedule more time for this category
+                  </Text>
+                )}
+                {gap === 0 && (
+                  <Text style={[styles.pendingText, { color: theme.tertiary }]}>
+                    Goal covered
                   </Text>
                 )}
               </View>
