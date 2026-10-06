@@ -19,8 +19,14 @@ import { AnchorRect } from "./ui/TimeDropdown";
 import {
   updateTask,
   logTaskActual,
+  getSeriesOccurrences,
   ChecklistItem,
 } from "@/services/tasksService";
+import {
+  calculateStreak,
+  isStreakEligible,
+  StreakResult,
+} from "@/utils/streaks";
 import { getWeatherForTask, WeatherResult } from "@/services/weatherService";
 
 interface TaskPreviewPopoverProps {
@@ -73,6 +79,36 @@ export function TaskPreviewPopover({
   const [substitutedText, setSubstitutedText] = useState("");
   const [actualNoteText, setActualNoteText] = useState("");
   const [savingActual, setSavingActual] = useState(false);
+  const [streak, setStreak] = useState<StreakResult | null>(null);
+
+  // Fetches the series and recalculates the streak (null if the task is not streak-eligible)
+  const fetchStreak = async (): Promise<StreakResult | null> => {
+    const tData = task?.originalTaskData;
+    if (!tData || !tData.seriesId || !isStreakEligible(tData)) return null;
+    try {
+      const occurrences = await getSeriesOccurrences(tData.seriesId);
+      return calculateStreak(occurrences);
+    } catch {
+      return null;
+    }
+  };
+
+  // Called after the user completes or logs an occurrence, so the counter updates straight away
+  const loadStreak = async () => {
+    setStreak(await fetchStreak());
+  };
+
+  useEffect(() => {
+    if (!visible) return;
+    let cancelled = false;
+    fetchStreak().then((result) => {
+      if (!cancelled) setStreak(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, task]);
   useEffect(() => {
     if (visible) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -109,6 +145,7 @@ export function TaskPreviewPopover({
     setCompleted(next);
     try {
       await updateTask(task.originalTaskId, { completed: next });
+      await loadStreak();
       onChanged?.();
     } catch {
       setCompleted(!next);
@@ -121,6 +158,7 @@ export function TaskPreviewPopover({
       await logTaskActual(task.originalTaskId, { status: "as_planned" });
       setCompleted(true);
       setShowLogActual(false);
+      await loadStreak();
       onChanged?.();
     } catch {
       // silently ignore for now
@@ -139,6 +177,7 @@ export function TaskPreviewPopover({
       });
       setCompleted(false);
       setShowLogActual(false);
+      await loadStreak();
       onChanged?.();
     } catch {
       // silently ignore for now
@@ -292,6 +331,24 @@ export function TaskPreviewPopover({
                 {formatTaskTime(task)}
               </Text>
             </View>
+
+            {/* Streak (recurring tasks only) */}
+            {streak && (
+              <View style={styles.row}>
+                <MaterialIcons
+                  name="local-fire-department"
+                  size={18}
+                  color={streak.current > 0 ? "#F97316" : theme.onSurfaceVariant}
+                  style={styles.icon}
+                />
+                <Text style={[styles.detailText, { color: theme.text }]}>
+                  {`Streak: ${streak.current} in a row`}
+                  {streak.longest > streak.current
+                    ? ` · best ${streak.longest}`
+                    : ""}
+                </Text>
+              </View>
+            )}
 
             {/* Location */}
             {tData.location && (
