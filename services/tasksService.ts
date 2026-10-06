@@ -10,20 +10,31 @@ import {
   Timestamp,
   serverTimestamp,
   writeBatch,
-} from 'firebase/firestore';
-import { db, auth } from '../config/firebase';
-import { generateOccurrenceDates, getRecurrenceEndBound, MAX_OCCURRENCES_PER_TASK } from '../utils/expandRecurrences';
-import { scheduleReminder } from '../hooks/use-task-reminders';
+} from "firebase/firestore";
+import { db, auth } from "../config/firebase";
+import {
+  generateOccurrenceDates,
+  getRecurrenceEndBound,
+  MAX_OCCURRENCES_PER_TASK,
+} from "../utils/expandRecurrences";
+import { scheduleReminder } from "../hooks/use-task-reminders";
 
-export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekday' | 'custom';
-export type BusyStatus = 'busy' | 'free';
-export type Visibility = 'default' | 'public' | 'private';
+export type TaskRecurrence =
+  | "none"
+  | "daily"
+  | "weekly"
+  | "monthly"
+  | "yearly"
+  | "weekday"
+  | "custom";
+export type BusyStatus = "busy" | "free";
+export type Visibility = "default" | "public" | "private";
 
 export interface CustomRecurrenceRule {
   interval: number;
-  unit: 'day' | 'week' | 'month' | 'year';
+  unit: "day" | "week" | "month" | "year";
   daysOfWeek?: number[];
-  endType: 'never' | 'on_date' | 'after_occurrences';
+  endType: "never" | "on_date" | "after_occurrences";
   endDate?: Timestamp;
   endOccurrences?: number;
 }
@@ -41,6 +52,7 @@ export interface Task {
   location: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  locationType?: "campus" | "gym" | null;
   colorHex: string;
   category: string | null;
   busyStatus: BusyStatus;
@@ -68,17 +80,19 @@ export interface Task {
   /** If set, this regular task counts as "allocated time" toward the given deadline task's ID. */
   linkedDeadlineId?: string | null;
   /** What actually happened for this task, logged after its time block passed. */
-  actualStatus?: 'as_planned' | 'different' | null;
+  actualStatus?: "as_planned" | "different" | null;
   /** If actualStatus is 'different', what the user did instead. */
   substitutedActivity?: string | null;
   /** Optional diary-style note about how the task went. */
   actualNote?: string | null;
 }
 
-export type CreateTaskData = Omit<Task, 'id' | 'ownerId' | 'createdAt'>;
-export type UpdateTaskData = Partial<Omit<Task, 'id' | 'ownerId' | 'createdAt'>>;
+export type CreateTaskData = Omit<Task, "id" | "ownerId" | "createdAt">;
+export type UpdateTaskData = Partial<
+  Omit<Task, "id" | "ownerId" | "createdAt">
+>;
 
-const TASKS_COLLECTION = 'tasks';
+const TASKS_COLLECTION = "tasks";
 
 /**
  * Creates a new task in Firestore.
@@ -86,7 +100,7 @@ const TASKS_COLLECTION = 'tasks';
  */
 export async function createTask(data: CreateTaskData): Promise<string> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const baseDocData = {
     ...data,
@@ -94,7 +108,7 @@ export async function createTask(data: CreateTaskData): Promise<string> {
     createdAt: serverTimestamp(),
   };
 
-  if (data.recurrence === 'none') {
+  if (data.recurrence === "none") {
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
     await scheduleReminder(data);
     return docRef.id;
@@ -102,20 +116,22 @@ export async function createTask(data: CreateTaskData): Promise<string> {
 
   // Materialize recurring occurrences
   const seriesId = doc(collection(db, TASKS_COLLECTION)).id;
-  
+
   const taskStart = data.startDate.toDate();
   const taskEnd = data.endDate.toDate();
   const durationMs = taskEnd.getTime() - taskStart.getTime();
 
   // Bounded generation: max 2 years forward for 'never' ends
-  const rangeEnd = new Date(taskStart.getTime() + 2 * 365 * 24 * 60 * 60 * 1000);
+  const rangeEnd = new Date(
+    taskStart.getTime() + 2 * 365 * 24 * 60 * 60 * 1000,
+  );
   const recurrenceEndBound = getRecurrenceEndBound(data as Task, rangeEnd);
-  
+
   const occurrenceDates = generateOccurrenceDates(
     data.recurrence,
     data.customRecurrenceRule,
     taskStart,
-    recurrenceEndBound
+    recurrenceEndBound,
   );
 
   const startHours = taskStart.getHours();
@@ -126,8 +142,8 @@ export async function createTask(data: CreateTaskData): Promise<string> {
   let batchCount = 0;
   let totalEmitted = 0;
   const maxOccurrences = data.customRecurrenceRule?.endOccurrences ?? undefined;
-  
-  let firstDocId = '';
+
+  let firstDocId = "";
 
   for (const occDate of occurrenceDates) {
     if (totalEmitted >= MAX_OCCURRENCES_PER_TASK) break;
@@ -158,7 +174,7 @@ export async function createTask(data: CreateTaskData): Promise<string> {
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
     return docRef.id;
   }
-  
+
   return firstDocId;
 }
 
@@ -168,18 +184,21 @@ export async function createTask(data: CreateTaskData): Promise<string> {
  * Note on Recurring Tasks: This query only fetches based on `startDate`. If a task was created before the range
  * but recurs within it, it will NOT be returned by this basic query. Client-side expansion or denormalization is needed later.
  */
-export async function getTasksForRange(start: Date, end: Date): Promise<Task[]> {
+export async function getTasksForRange(
+  start: Date,
+  end: Date,
+): Promise<Task[]> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const startTimestamp = Timestamp.fromDate(start);
   const endTimestamp = Timestamp.fromDate(end);
 
   const q = query(
     collection(db, TASKS_COLLECTION),
-    where('ownerId', '==', currentUser.uid),
-    where('startDate', '>=', startTimestamp),
-    where('startDate', '<=', endTimestamp)
+    where("ownerId", "==", currentUser.uid),
+    where("startDate", ">=", startTimestamp),
+    where("startDate", "<=", endTimestamp),
   );
 
   const querySnapshot = await getDocs(q);
@@ -205,9 +224,12 @@ export async function getTasksForRange(start: Date, end: Date): Promise<Task[]> 
  * non-expired recurring definitions. At very large scale, consider denormalizing occurrences or adding
  * server-side recurrence expansion.
  */
-export async function getRecurringTasks(rangeStart: Date, rangeEnd: Date): Promise<Task[]> {
+export async function getRecurringTasks(
+  rangeStart: Date,
+  rangeEnd: Date,
+): Promise<Task[]> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const rangeEndTimestamp = Timestamp.fromDate(rangeEnd);
   const rangeStartTimestamp = Timestamp.fromDate(rangeStart);
@@ -215,8 +237,8 @@ export async function getRecurringTasks(rangeStart: Date, rangeEnd: Date): Promi
   // Fetch all user tasks that started on or before rangeEnd
   const q = query(
     collection(db, TASKS_COLLECTION),
-    where('ownerId', '==', currentUser.uid),
-    where('startDate', '<=', rangeEndTimestamp)
+    where("ownerId", "==", currentUser.uid),
+    where("startDate", "<=", rangeEndTimestamp),
   );
 
   const querySnapshot = await getDocs(q);
@@ -225,7 +247,7 @@ export async function getRecurringTasks(rangeStart: Date, rangeEnd: Date): Promi
     const data = { id: docSnap.id, ...docSnap.data() } as Task;
 
     // Client-side filter: only recurring tasks
-    if (data.recurrence === 'none') return;
+    if (data.recurrence === "none") return;
 
     // Client-side filter: skip expired recurring tasks whose end date is before the visible range
     if (data.recurrenceEndDate) {
@@ -242,9 +264,12 @@ export async function getRecurringTasks(rangeStart: Date, rangeEnd: Date): Promi
 /**
  * Updates an existing task.
  */
-export async function updateTask(id: string, data: UpdateTaskData): Promise<void> {
+export async function updateTask(
+  id: string,
+  data: UpdateTaskData,
+): Promise<void> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const taskRef = doc(db, TASKS_COLLECTION, id);
   await updateDoc(taskRef, data);
@@ -253,14 +278,19 @@ export async function updateTask(id: string, data: UpdateTaskData): Promise<void
 /**
  * Updates all occurrences in a series with new shared data and shifts the dates relative to timeDeltaMs.
  */
-export async function updateSeries(seriesId: string, data: UpdateTaskData, timeDeltaMs: number, durationMs: number | null = null): Promise<void> {
+export async function updateSeries(
+  seriesId: string,
+  data: UpdateTaskData,
+  timeDeltaMs: number,
+  durationMs: number | null = null,
+): Promise<void> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const q = query(
     collection(db, TASKS_COLLECTION),
-    where('ownerId', '==', currentUser.uid),
-    where('seriesId', '==', seriesId)
+    where("ownerId", "==", currentUser.uid),
+    where("seriesId", "==", seriesId),
   );
 
   const snapshot = await getDocs(q);
@@ -288,9 +318,10 @@ export async function updateSeries(seriesId: string, data: UpdateTaskData, timeD
       const origEnd = taskData.endDate.toDate();
 
       const newStart = new Date(origStart.getTime() + timeDeltaMs);
-      const newEnd = durationMs !== null 
-        ? new Date(newStart.getTime() + durationMs)
-        : new Date(origEnd.getTime() + timeDeltaMs);
+      const newEnd =
+        durationMs !== null
+          ? new Date(newStart.getTime() + durationMs)
+          : new Date(origEnd.getTime() + timeDeltaMs);
 
       batch.update(docSnap.ref, {
         ...sharedData,
@@ -307,7 +338,7 @@ export async function updateSeries(seriesId: string, data: UpdateTaskData, timeD
  */
 export async function deleteTask(id: string): Promise<void> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const taskRef = doc(db, TASKS_COLLECTION, id);
   await deleteDoc(taskRef);
@@ -318,14 +349,14 @@ export async function deleteTask(id: string): Promise<void> {
  */
 export async function deleteSeries(seriesId: string): Promise<void> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const q = query(
     collection(db, TASKS_COLLECTION),
-    where('ownerId', '==', currentUser.uid),
-    where('seriesId', '==', seriesId)
+    where("ownerId", "==", currentUser.uid),
+    where("seriesId", "==", seriesId),
   );
-  
+
   const snapshot = await getDocs(q);
   if (snapshot.empty) return;
 
@@ -356,12 +387,12 @@ export async function deleteSeries(seriesId: string): Promise<void> {
  */
 export async function getTaskById(id: string): Promise<Task | null> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
-  const { getDoc } = await import('firebase/firestore');
+  const { getDoc } = await import("firebase/firestore");
   const taskRef = doc(db, TASKS_COLLECTION, id);
   const docSnap = await getDoc(taskRef);
-  
+
   if (docSnap.exists() && docSnap.data().ownerId === currentUser.uid) {
     return { id: docSnap.id, ...docSnap.data() } as Task;
   }
@@ -373,15 +404,15 @@ export async function getTaskById(id: string): Promise<Task | null> {
  */
 export async function getUpcomingDeadlines(): Promise<Task[]> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const now = Timestamp.fromDate(new Date());
 
   const q = query(
     collection(db, TASKS_COLLECTION),
-    where('ownerId', '==', currentUser.uid),
-    where('isDeadline', '==', true),
-    where('startDate', '>=', now)
+    where("ownerId", "==", currentUser.uid),
+    where("isDeadline", "==", true),
+    where("startDate", ">=", now),
   );
 
   const snapshot = await getDocs(q);
@@ -401,19 +432,21 @@ export interface UnallocatedDeadline {
  * Finds deadlines within their warning window that have no linked tasks
  * (i.e. no time has been allocated toward them).
  */
-export async function getUnallocatedDeadlines(): Promise<UnallocatedDeadline[]> {
+export async function getUnallocatedDeadlines(): Promise<
+  UnallocatedDeadline[]
+> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const now = new Date();
   const lookahead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const q = query(
     collection(db, TASKS_COLLECTION),
-    where('ownerId', '==', currentUser.uid),
-    where('isDeadline', '==', true),
-    where('startDate', '>=', Timestamp.fromDate(now)),
-    where('startDate', '<=', Timestamp.fromDate(lookahead))
+    where("ownerId", "==", currentUser.uid),
+    where("isDeadline", "==", true),
+    where("startDate", ">=", Timestamp.fromDate(now)),
+    where("startDate", "<=", Timestamp.fromDate(lookahead)),
   );
 
   const snapshot = await getDocs(q);
@@ -427,14 +460,15 @@ export async function getUnallocatedDeadlines(): Promise<UnallocatedDeadline[]> 
   for (const deadline of deadlines) {
     const warningHours = deadline.deadlineWarningHours ?? 72;
     const deadlineDate = deadline.startDate.toDate();
-    const hoursUntil = (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+    const hoursUntil =
+      (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
     if (hoursUntil > warningHours) continue;
 
     const linkedQuery = query(
       collection(db, TASKS_COLLECTION),
-      where('ownerId', '==', currentUser.uid),
-      where('linkedDeadlineId', '==', deadline.id)
+      where("ownerId", "==", currentUser.uid),
+      where("linkedDeadlineId", "==", deadline.id),
     );
     const linkedSnapshot = await getDocs(linkedQuery);
 
@@ -446,7 +480,7 @@ export async function getUnallocatedDeadlines(): Promise<UnallocatedDeadline[]> 
   return results;
 }
 export interface LogActualParams {
-  status: 'as_planned' | 'different';
+  status: "as_planned" | "different";
   substitutedActivity?: string | null;
   note?: string | null;
 }
@@ -454,16 +488,22 @@ export interface LogActualParams {
 /**
  * Logs what actually happened for a task, after its scheduled block has passed.
  */
-export async function logTaskActual(id: string, params: LogActualParams): Promise<void> {
+export async function logTaskActual(
+  id: string,
+  params: LogActualParams,
+): Promise<void> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const taskRef = doc(db, TASKS_COLLECTION, id);
   await updateDoc(taskRef, {
     actualStatus: params.status,
-    substitutedActivity: params.status === 'different' ? (params.substitutedActivity?.trim() || null) : null,
+    substitutedActivity:
+      params.status === "different"
+        ? params.substitutedActivity?.trim() || null
+        : null,
     actualNote: params.note?.trim() || null,
-    completed: params.status === 'as_planned' ? true : false,
+    completed: params.status === "as_planned" ? true : false,
   });
 }
 
@@ -485,7 +525,7 @@ export function calculateWeeklyReview(tasks: Task[]): CategoryReviewStats[] {
   for (const task of tasks) {
     if (task.isDeadline) continue; // deadlines aren't schedulable time, skip them
 
-    const category = task.category || 'Uncategorized';
+    const category = task.category || "Uncategorized";
     if (!statsByCategory.has(category)) {
       statsByCategory.set(category, {
         category,
@@ -498,12 +538,13 @@ export function calculateWeeklyReview(tasks: Task[]): CategoryReviewStats[] {
     const stats = statsByCategory.get(category)!;
 
     const durationHours =
-      (task.endDate.toDate().getTime() - task.startDate.toDate().getTime()) / (1000 * 60 * 60);
+      (task.endDate.toDate().getTime() - task.startDate.toDate().getTime()) /
+      (1000 * 60 * 60);
     stats.plannedHours += durationHours;
 
-    if (task.actualStatus === 'as_planned') {
+    if (task.actualStatus === "as_planned") {
       stats.completedAsPlannedHours += durationHours;
-    } else if (task.actualStatus === 'different') {
+    } else if (task.actualStatus === "different") {
       stats.substitutedCount += 1;
     } else {
       const isPast = task.endDate.toDate().getTime() < Date.now();
