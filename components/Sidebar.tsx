@@ -128,7 +128,7 @@ export function Sidebar() {
 
       <View style={styles.bottomSection}>
         {/* Settings */}
-        <TouchableOpacity style={styles.settingsItem} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.settingsItem} activeOpacity={0.7} onPress={() => router.push('/settings' as any)}>
           <NavIcon name="gear" size={20} color={theme.textSecondary} />
           <Text
             style={[

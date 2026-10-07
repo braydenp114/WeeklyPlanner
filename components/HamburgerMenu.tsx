@@ -151,7 +151,14 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
           </View>
 
           <View style={styles.bottomSection}>
-            <TouchableOpacity style={styles.settingsItem} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.settingsItem}
+              activeOpacity={0.7}
+              onPress={() => {
+                onClose();
+                router.push('/settings' as any);
+              }}
+            >
               <NavIcon name="gear" size={20} color={theme.textSecondary} />
               <Text
                 style={[
