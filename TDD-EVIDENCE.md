@@ -35,4 +35,11 @@ Written down before T03 so the tests and the eventual real tracker share the sam
 - **Failing:** T02-b-fail.png. Caption: fails because the hard-coded T01 implementation always returns `'geofence'` regardless of input.
 - **Code to pass:** T02-c-code.png. Caption: adds the real `if` (as a ternary) — now checks `locationSharing` instead of always returning `'geofence'`.
 - **Passing:** T02-d-pass.png
+- **Commits:** 030cb08 → 0768e0f
+
+## T03: stores a new location point when sharing is on (AC1)
+- **Test code:** T03-a-test.png. Caption: checks that `createLocationTracker(...).record(userId, point)` adds the point to the store for that user.
+- **Failing:** T03-b-fail.png. Caption: fails because `createLocationTracker` doesn't exist yet.
+- **Code to pass:** T03-c-code.png. Caption: <fill in after green>
+- **Passing:** T03-d-pass.png
 - **Commits:** <red hash> → <green hash>
