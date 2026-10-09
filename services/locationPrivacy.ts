@@ -10,6 +10,7 @@ export interface LocationPoint {
 
 interface LocationStore {
   addPoint(userId: string, point: LocationPoint): void;
+  deletePoints(userId: string): void;
 }
 
 export function createLocationTracker({
@@ -33,4 +34,8 @@ export function createLocationTracker({
       store.addPoint(userId, point);
     },
   };
+}
+
+export function deleteLocationHistory(store: LocationStore, userId: string) {
+  store.deletePoints(userId);
 }
