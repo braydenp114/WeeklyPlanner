@@ -5,6 +5,8 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TaskItem, HoverableTaskCard, getPastEventStyle, formatShortTime } from './calendar-shared';
 import { AnchorRect } from './ui/TimeDropdown';
 import { getStreakIcon } from './streakIcons';
+import { Flag } from 'lucide-react-native';
+import { PRIORITY_META } from '@/utils/priority';
 import type { ChallengeWithSummary } from '@/context/StreaksContext';
 import { StreakDayStatus, toDayKey } from '@/utils/streakChallenge';
 
@@ -183,6 +185,14 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
                           <Text style={[styles.eventTime, { color: theme.textSecondary }]} numberOfLines={1}>
                             {formatShortTime(task.originalTaskData.startDate.toDate())}
                           </Text>
+                        )}
+                        {!!task.originalTaskData.priority && !isCompact && (
+                          <Flag
+                            size={11}
+                            strokeWidth={2.5}
+                            color={asBar ? '#FFFFFF' : PRIORITY_META[task.originalTaskData.priority].colorHex}
+                            fill={asBar ? '#FFFFFF' : PRIORITY_META[task.originalTaskData.priority].colorHex}
+                          />
                         )}
                         <Text
                           style={[

@@ -18,6 +18,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import MonthlyGridView from './MonthlyGridView';
 import { SwipeNavigator, wasJustSwiped } from './SwipeNavigator';
 import { useStreaks } from '@/context/StreaksContext';
+import { PRIORITY_META } from '@/utils/priority';
 import { getTasksForRange, Task, deleteTask, deleteSeries } from '@/services/tasksService';
 import { AnchorRect } from './ui/TimeDropdown';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -500,6 +501,7 @@ export default function WeeklyGrid() {
         {titleText}
         <Text style={[styles.eventMeta, !isDesktop && styles.eventTitleMobile]} numberOfLines={1}>
           {formatTimeRange(start, end)}
+          {task.originalTaskData.priority ? ` · ${PRIORITY_META[task.originalTaskData.priority].label}` : ''}
         </Text>
         {height >= 60 && !!task.category && (
           <Text style={[styles.eventMeta, styles.eventCategory]} numberOfLines={1}>
