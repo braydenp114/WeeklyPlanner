@@ -1,9 +1,8 @@
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, ScrollView } from 'react-native';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import React, { useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { TaskItem, HoverableTaskCard, getPastEventStyle } from '@/components/WeeklyGrid';
+import { TaskItem, HoverableTaskCard, getPastEventStyle, formatShortTime } from './calendar-shared';
 import { AnchorRect } from './ui/TimeDropdown';
 
 interface MonthlyGridViewProps {
@@ -17,8 +16,14 @@ interface MonthlyGridViewProps {
 const locale = Intl.DateTimeFormat().resolvedOptions().locale;
 const dayFormatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
 const dayNumFormatter = new Intl.DateTimeFormat(locale, { day: 'numeric' });
+const dayMonthFormatter = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' });
 
-// A helper to determine if a date is in the same month as the primary month we're viewing
+/** Space taken by the date number at the top of each cell, and by one event row. */
+const CELL_HEADER_HEIGHT = 28;
+const EVENT_ROW_HEIGHT = 20;
+/** Below this cell width, events are shown as compact coloured bars (phone screens). */
+const COMPACT_CELL_WIDTH = 90;
+
 function isSameMonth(date1: Date, date2: Date) {
   return date1.getMonth() === date2.getMonth() && date1.getFullYear() === date2.getFullYear();
 }
@@ -31,33 +36,21 @@ function isSameDay(date1: Date, date2: Date) {
   );
 }
 
-function isToday(date: Date, currentDate: Date) {
-  return (
-    date.getDate() === currentDate.getDate() &&
-    date.getMonth() === currentDate.getMonth() &&
-    date.getFullYear() === currentDate.getFullYear()
-  );
-}
-
 /**
- * Formats a fractional startHour into a human-readable time string (e.g. "9:30a").
+ * Month view styled like Google Calendar: weekday names sit inside the grid so they line up
+ * with the columns, every week row shares the available height, all-day tasks are coloured
+ * bars and timed tasks are a dot + time + title. Extra tasks collapse into "+N more".
  */
-function formatHourLabel(startHour: number): string {
-  const h = Math.floor(startHour);
-  const m = Math.round((startHour % 1) * 60);
-  const period = h >= 12 ? 'p' : 'a';
-  const displayH = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return m > 0 ? `${displayH}:${String(m).padStart(2, '0')}${period}` : `${displayH}${period}`;
-}
-
 export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick, onTaskClick }: MonthlyGridViewProps) {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
+  const [gridSize, setGridSize] = useState({ width: 0, height: 0 });
 
   if (!dates || dates.length === 0) return null;
 
-  // The 'primary' month is usually the month of the middle date in our grid
+  // The 'primary' month is the month of the middle date in our grid
   const primaryMonthDate = dates[Math.floor(dates.length / 2)];
+  const gridLineColor = theme.outlineVariant + '80';
 
   // Group dates into weeks (rows)
   const weeks: Date[][] = [];
@@ -65,139 +58,122 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
     weeks.push(dates.slice(i, i + 7));
   }
 
-  // Get headers from the first week
-  const headers = weeks[0].map((date) => dayFormatter.format(date).toUpperCase());
+  const cellWidth = gridSize.width / 7;
+  const rowHeight = gridSize.height / weeks.length;
+  const isCompact = cellWidth > 0 && cellWidth < COMPACT_CELL_WIDTH;
+  const rowSize = isCompact ? 16 : EVENT_ROW_HEIGHT;
+  // How many task rows fit in a cell (at least one)
+  const maxRows = rowHeight > 0 ? Math.max(1, Math.floor((rowHeight - CELL_HEADER_HEIGHT) / rowSize)) : 3;
 
-  // Function to filter and sort tasks for a specific date using actual calendar date matching
-  const getTasksForDate = (date: Date) => {
-    const dayTasks = tasks.filter(t => isSameDay(t.actualDate, date));
-    // Sort: all-day tasks first, then by startHour
-    return dayTasks.sort((a, b) => {
-      if (a.isAllDay && !b.isAllDay) return -1;
-      if (!a.isAllDay && b.isAllDay) return 1;
-      return a.startHour - b.startHour;
-    });
-  };
+  const getTasksForDate = (date: Date) =>
+    tasks
+      .filter((t) => isSameDay(t.actualDate, date))
+      .sort((a, b) => {
+        if (a.isAllDay && !b.isAllDay) return -1;
+        if (!a.isAllDay && b.isAllDay) return 1;
+        return a.startHour - b.startHour;
+      });
 
   return (
-    <View style={styles.container}>
-      {/* Header Row (MON - SUN) */}
-      <View style={[styles.headerRow, { backgroundColor: theme.surfaceContainerLow, borderColor: theme.outlineVariant }]}>
-        {headers.map((header, idx) => (
-          <View key={idx} style={[styles.headerCell, { borderColor: theme.outlineVariant }, idx === headers.length - 1 && { borderRightWidth: 0 }]}>
-            <Text style={[styles.headerText, { color: theme.textSecondary }]}>{header}</Text>
+    <View style={[styles.container, { backgroundColor: theme.surfaceContainerLowest }]}>
+      {/* Weekday names, using the same flex columns as the grid so they line up */}
+      <View style={styles.headerRow}>
+        {weeks[0].map((date, idx) => (
+          <View key={idx} style={[styles.headerCell, { borderLeftColor: gridLineColor }, idx === 0 && styles.firstColumn]}>
+            <Text style={[styles.headerText, { color: theme.textSecondary }]}>
+              {dayFormatter.format(date).toUpperCase()}
+            </Text>
           </View>
         ))}
       </View>
 
-      {/* Calendar Grid */}
-      <ScrollView style={[styles.gridScroll, { backgroundColor: theme.background }]} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
-        <View style={styles.gridBody}>
-          {weeks.map((week, weekIdx) => (
-            <View key={weekIdx} style={[styles.weekRow, { borderColor: theme.outlineVariant }, weekIdx === 0 && { borderTopWidth: 1 }]}>
-              {week.map((date, dayIdx) => {
-                const isCurrentMonth = isSameMonth(date, primaryMonthDate);
-                const isDayToday = isToday(date, currentDate);
-                const dayTasks = getTasksForDate(date);
-                
-                // Cap visible events
-                const MAX_VISIBLE_EVENTS = 4;
-                const visibleTasks = dayTasks.slice(0, MAX_VISIBLE_EVENTS);
-                const overflowCount = dayTasks.length - MAX_VISIBLE_EVENTS;
+      <View
+        style={styles.gridBody}
+        onLayout={(e) => setGridSize({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+      >
+        {weeks.map((week, weekIdx) => (
+          <View key={weekIdx} style={[styles.weekRow, { borderBottomColor: gridLineColor }]}>
+            {week.map((date, dayIdx) => {
+              const isCurrentMonth = isSameMonth(date, primaryMonthDate);
+              const isDayToday = isSameDay(date, currentDate);
+              const dayTasks = getTasksForDate(date);
+              // If not everything fits, keep the last row for the "+N more" link
+              const visibleCount = dayTasks.length > maxRows ? Math.max(maxRows - 1, 0) : dayTasks.length;
+              const visibleTasks = dayTasks.slice(0, visibleCount);
+              const overflowCount = dayTasks.length - visibleCount;
+              const label = date.getDate() === 1 && !isCompact ? dayMonthFormatter.format(date) : dayNumFormatter.format(date);
 
-                return (
-                  <TouchableOpacity
-                    key={date.toISOString()}
-                    activeOpacity={0.7}
-                    onPress={() => onDayClick(date)}
-                    style={[
-                      styles.dayCell,
-                      { borderColor: theme.outlineVariant },
-                      dayIdx === 0 && { borderLeftWidth: 1 },
-                      isDayToday && { backgroundColor: theme.surfaceContainerHighest },
-                    ]}
-                  >
-                    <View style={styles.dayCellHeader}>
-                      <View
+              return (
+                <TouchableOpacity
+                  key={date.toISOString()}
+                  activeOpacity={0.7}
+                  onPress={() => onDayClick(date)}
+                  style={[styles.dayCell, { borderLeftColor: gridLineColor }, dayIdx === 0 && styles.firstColumn]}
+                >
+                  <View style={styles.dayCellHeader}>
+                    <View style={[styles.dateBadge, isDayToday && { backgroundColor: theme.primaryAction }, label.length > 2 && styles.dateBadgeWide]}>
+                      <Text
                         style={[
-                          styles.dateBadge,
-                          isDayToday && { backgroundColor: theme.primaryAction },
+                          styles.dateText,
+                          { color: isDayToday ? '#FFFFFF' : isCurrentMonth ? theme.text : theme.textMuted },
                         ]}
                       >
+                        {label}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {visibleTasks.map((task) => {
+                    const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
+                    const completed = !!task.originalTaskData.completed;
+                    const asBar = task.isAllDay || isCompact;
+
+                    return (
+                      <HoverableTaskCard
+                        key={task.id}
+                        task={task}
+                        style={[
+                          styles.eventRow,
+                          { height: rowSize - 2 },
+                          asBar && getPastEventStyle(isPast, task.colorHex),
+                          asBar && styles.eventBar,
+                          !asBar && isPast && { opacity: 0.6 },
+                        ]}
+                        onPress={(t, rect) => onTaskClick?.(t, rect)}
+                      >
+                        {!asBar && <View style={[styles.eventDot, { backgroundColor: task.colorHex }]} />}
+                        {!asBar && (
+                          <Text style={[styles.eventTime, { color: theme.textSecondary }]} numberOfLines={1}>
+                            {formatShortTime(task.originalTaskData.startDate.toDate())}
+                          </Text>
+                        )}
                         <Text
                           style={[
-                            styles.dateText,
-                            { color: isDayToday ? '#FFFFFF' : (isCurrentMonth ? theme.text : theme.textMuted) },
+                            styles.eventTitle,
+                            { color: asBar ? '#FFFFFF' : theme.text },
+                            isCompact && styles.eventTitleCompact,
+                            completed && styles.completedStrike,
                           ]}
+                          numberOfLines={1}
                         >
-                          {dayNumFormatter.format(date)}
+                          {completed ? '✓ ' : ''}
+                          {task.title}
                         </Text>
-                      </View>
-                    </View>
+                      </HoverableTaskCard>
+                    );
+                  })}
 
-                    <View style={styles.eventsContainer}>
-                      {visibleTasks.map(task => {
-                        const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
-                        const pastDotStyle = getPastEventStyle(isPast, task.colorHex);
-                        
-                        return (
-                          <HoverableTaskCard 
-                            key={task.id} 
-                            task={task}
-                            style={styles.eventRow}
-                            onPress={(t, rect) => {
-                              onTaskClick?.(t, rect);
-                            }}
-                          >
-                            {task.originalTaskData.completed ? (
-                              <MaterialIcons name="check-circle" size={9} color={theme.textMuted} />
-                            ) : (
-                              <View style={[styles.eventDot, pastDotStyle]} />
-                            )}
-                            {task.isAllDay ? (
-                              <Text
-                                style={[
-                                  styles.eventTitle,
-                                  { color: isCurrentMonth ? (isPast ? theme.textMuted : theme.text) : theme.textMuted },
-                                  task.originalTaskData.completed && styles.completedStrike,
-                                ]}
-                                numberOfLines={1}
-                              >
-                                {task.title}
-                              </Text>
-                            ) : (
-                              <>
-                                <Text style={[styles.eventTime, { color: isCurrentMonth ? (isPast ? 'rgba(118,117,134,0.5)' : theme.textMuted) : 'rgba(118,117,134,0.5)' }]} numberOfLines={1}>
-                                  {formatHourLabel(task.startHour)}
-                                </Text>
-                                <Text
-                                  style={[
-                                    styles.eventTitle,
-                                    { color: isCurrentMonth ? (isPast ? theme.textMuted : theme.text) : theme.textMuted },
-                                    task.originalTaskData.completed && styles.completedStrike,
-                                  ]}
-                                  numberOfLines={1}
-                                >
-                                  {task.title}
-                                </Text>
-                              </>
-                            )}
-                          </HoverableTaskCard>
-                        );
-                      })}
-                      {overflowCount > 0 && (
-                        <Text style={[styles.overflowText, { color: theme.textMuted }]}>
-                          +{overflowCount} more
-                        </Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          ))}
-        </View>
-      </ScrollView>
+                  {overflowCount > 0 && (
+                    <Text style={[styles.overflowText, { color: theme.textSecondary }]} numberOfLines={1}>
+                      {isCompact ? `+${overflowCount}` : `${overflowCount} more`}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ))}
+      </View>
 
       {tasks.length === 0 && (
         <View style={styles.emptyStateOverlay} pointerEvents="box-none">
@@ -214,96 +190,99 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    minWidth: 700, // Ensure it doesn't squish too much, forces horizontal scroll if needed
   },
   headerRow: {
     flexDirection: 'row',
-    borderWidth: 1,
-    borderRadius: RoundedGeometry.default,
-    overflow: 'hidden',
-    marginBottom: 4,
   },
   headerCell: {
     flex: 1,
-    paddingVertical: 8,
+    paddingTop: 8,
+    paddingBottom: 2,
     alignItems: 'center',
-    justifyContent: 'center',
-    borderRightWidth: 1,
+    borderLeftWidth: 1,
+  },
+  firstColumn: {
+    borderLeftWidth: 0,
   },
   headerText: {
-    fontFamily: Fonts.mono,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  gridScroll: {
-    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 0.8,
   },
   gridBody: {
     flex: 1,
-    borderColor: 'transparent',
   },
   weekRow: {
-    flexDirection: 'row',
     flex: 1,
-    minHeight: 120, // fixed minimum height for week rows
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    minHeight: 64,
   },
   dayCell: {
     flex: 1,
-    borderRightWidth: 1,
-    borderBottomWidth: 1,
-    padding: 6,
-    overflow: 'hidden', // prevent events from spilling out
+    borderLeftWidth: 1,
+    paddingHorizontal: 2,
+    overflow: 'hidden',
   },
   dayCellHeader: {
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    marginBottom: 4,
+    height: CELL_HEADER_HEIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dateBadge: {
-    width: 24,
+    minWidth: 24,
     height: 24,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  dateBadgeWide: {
+    paddingHorizontal: 8,
   },
   dateText: {
-    fontFamily: Fonts.headline,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  eventsContainer: {
-    flex: 1,
-    gap: 3,
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    fontWeight: '500',
   },
   eventRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    marginBottom: 2,
+  },
+  eventBar: {
+    paddingHorizontal: 6,
   },
   eventDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   eventTime: {
-    fontFamily: Fonts.mono,
-    fontSize: 9,
-    width: 28,
+    fontFamily: Fonts.body,
+    fontSize: 11,
   },
   eventTitle: {
     fontFamily: Fonts.body,
-    fontSize: 11,
+    fontSize: 12,
+    fontWeight: '500',
     flex: 1,
+  },
+  eventTitleCompact: {
+    fontSize: 10,
   },
   completedStrike: {
     textDecorationLine: 'line-through',
   },
   overflowText: {
-    fontFamily: Fonts.mono,
-    fontSize: 9,
+    fontFamily: Fonts.body,
+    fontSize: 11,
     fontWeight: '600',
-    marginTop: 2,
+    paddingHorizontal: 4,
   },
   emptyStateOverlay: {
     position: 'absolute',
