@@ -34,6 +34,7 @@ import {
   createTask,
   updateTask,
   updateSeries,
+  replaceRecurrence,
   CreateTaskData,
   TaskRecurrence,
   BusyStatus,
@@ -583,8 +584,19 @@ export default function NewTaskModal({
         linkedDeadlineId: !isDeadline ? linkedDeadlineId : null,
       };
 
+      // Did the user change the Repeat setting while editing?
+      const repeatChanged =
+        !!editTaskData &&
+        (editTaskData.recurrence !== recurrence ||
+          (recurrence === "custom" &&
+            JSON.stringify(editTaskData.customRecurrenceRule) !==
+              JSON.stringify(customRecurrenceRule)));
+
       if (editTaskData && editTaskData.id) {
-        if (editTaskScope === "all" && editTaskData.seriesId) {
+        if (repeatChanged) {
+          // Regenerate occurrences from this task onwards with the new repeat rule
+          await replaceRecurrence(editTaskData, taskData);
+        } else if (editTaskScope === "all" && editTaskData.seriesId) {
           const origStartMs = editTaskData.startDate.toDate().getTime();
 
           const newStartMs = startDate.getTime();
@@ -609,6 +621,7 @@ export default function NewTaskModal({
       onSaved?.();
       onClose();
     } catch (e: any) {
+      console.error("[NewTaskModal] Failed to save task:", e);
       setError(e.message || "Failed to save task");
     } finally {
       setSaving(false);

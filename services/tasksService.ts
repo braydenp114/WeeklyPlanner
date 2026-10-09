@@ -83,6 +83,13 @@ export type UpdateTaskData = Partial<Omit<Task, 'id' | 'ownerId' | 'createdAt'>>
 const TASKS_COLLECTION = 'tasks';
 
 /**
+ * How many occurrences are written per batch when materialising a recurring task.
+ * Kept well under Firestore's batch limit, since serverTimestamp() fields can count
+ * as extra operations; a daily task (up to 366 documents) is saved in two batches.
+ */
+const OCCURRENCE_BATCH_SIZE = 200;
+
+/**
  * Creates a new task in Firestore.
  * Infers the ownerId from the currently authenticated user.
  */
@@ -126,7 +133,7 @@ export async function createTask(data: CreateTaskData): Promise<string> {
   const startMinutes = taskStart.getMinutes();
   const startSeconds = taskStart.getSeconds();
 
-  const batch = writeBatch(db);
+  let batch = writeBatch(db);
   let batchCount = 0;
   let totalEmitted = 0;
   const maxOccurrences = data.customRecurrenceRule?.endOccurrences ?? undefined;
@@ -153,11 +160,20 @@ export async function createTask(data: CreateTaskData): Promise<string> {
     batch.set(docRef, occData);
     batchCount++;
     totalEmitted++;
+
+    // Commit in chunks so long series (e.g. daily) never exceed the batch limit
+    if (batchCount === OCCURRENCE_BATCH_SIZE) {
+      await batch.commit();
+      batch = writeBatch(db);
+      batchCount = 0;
+    }
   }
 
   if (batchCount > 0) {
     await batch.commit();
-  } else {
+  }
+
+  if (totalEmitted === 0) {
     // Fallback if no occurrences generated for some reason
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
     return docRef.id;
@@ -326,6 +342,41 @@ export async function getSeriesOccurrences(seriesId: string): Promise<Task[]> {
     occurrences.push({ id: docSnap.id, ...docSnap.data() } as Task);
   });
   return occurrences;
+}
+
+/**
+ * Called when the Repeat setting of an existing task is changed in the edit modal.
+ * A plain update only changes the field on one document, so no new occurrences would
+ * appear. Instead, the edited task (and, for a series, every occurrence from it onwards)
+ * is removed and the task is recreated with the new repeat rule.
+ * Earlier occurrences of a series are kept, so past completions and streak history stay.
+ */
+export async function replaceRecurrence(original: Task, data: CreateTaskData): Promise<string> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  if (original.seriesId) {
+    const fromMs = original.startDate.toDate().getTime();
+    const q = query(
+      collection(db, TASKS_COLLECTION),
+      where('ownerId', '==', currentUser.uid),
+      where('seriesId', '==', original.seriesId)
+    );
+    const snapshot = await getDocs(q);
+    const refsToDelete = snapshot.docs
+      .filter((d) => d.data().startDate.toDate().getTime() >= fromMs)
+      .map((d) => d.ref);
+
+    for (let i = 0; i < refsToDelete.length; i += OCCURRENCE_BATCH_SIZE) {
+      const batch = writeBatch(db);
+      refsToDelete.slice(i, i + OCCURRENCE_BATCH_SIZE).forEach((ref) => batch.delete(ref));
+      await batch.commit();
+    }
+  } else if (original.id) {
+    await deleteDoc(doc(db, TASKS_COLLECTION, original.id));
+  }
+
+  return createTask(data);
 }
 
 /**
