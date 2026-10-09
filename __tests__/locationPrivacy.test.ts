@@ -1,4 +1,4 @@
-import { getVerificationMethod, createLocationTracker } from '@/services/locationPrivacy';
+import { getVerificationMethod, createLocationTracker, deleteLocationHistory } from '@/services/locationPrivacy';
 import { createMemoryStore } from './helpers/memoryStore';
 
 describe('location privacy', () => {
@@ -39,5 +39,14 @@ describe('location privacy', () => {
     tracker.setSharing(false);
 
     expect(stopWatcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('6. deletes all stored location history for the user', () => {
+    const store = createMemoryStore();
+    store.addPoint('user1', { latitude: -36.85, longitude: 174.76, timestamp: 1 });
+
+    deleteLocationHistory(store, 'user1');
+
+    expect(store.getPoints('user1')).toEqual([]);
   });
 });
