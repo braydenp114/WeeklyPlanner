@@ -1,11 +1,24 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Calendar items (time blocks on the grid)
     match /tasks/{taskId} {
       // Allow read/update/delete if the user owns the task
       allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
       
       // Allow create if the user is authenticated and setting themselves as the owner
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+    }
+
+    // To-do items shown in the sidebar (no time slot yet)
+    match /todos/{todoId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+    }
+
+    // Streak challenges (daily check-ins shown in the sidebar and month view)
+    match /streaks/{streakId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
     }
   }
