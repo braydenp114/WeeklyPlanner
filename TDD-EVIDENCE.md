@@ -28,4 +28,11 @@ Written down before T03 so the tests and the eventual real tracker share the sam
 - **Failing:** T01-b-fail.png. Caption: fails because `services/locationPrivacy.ts` doesn't exist yet (module not found).
 - **Code to pass:** T01-c-code.png. Caption: minimum code — a hard-coded `return 'geofence'`, no conditional logic yet.
 - **Passing:** T01-d-pass.png
+- **Commits:** bf6d102 → 77efc7d
+
+## T02: falls back to manual confirmation when location sharing is off (AC3)
+- **Test code:** T02-a-test.png. Caption: checks that `getVerificationMethod` returns `'manual'` when location sharing is off.
+- **Failing:** T02-b-fail.png. Caption: fails because the hard-coded T01 implementation always returns `'geofence'` regardless of input.
+- **Code to pass:** T02-c-code.png. Caption: adds the real `if` (as a ternary) — now checks `locationSharing` instead of always returning `'geofence'`.
+- **Passing:** T02-d-pass.png
 - **Commits:** <red hash> → <green hash>
