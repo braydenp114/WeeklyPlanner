@@ -17,6 +17,7 @@ import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MonthlyGridView from './MonthlyGridView';
 import { SwipeNavigator, wasJustSwiped } from './SwipeNavigator';
+import { ReflectionCard } from './ReflectionCard';
 import { useStreaks } from '@/context/StreaksContext';
 import { PRIORITY_META } from '@/utils/priority';
 import { getTasksForRange, Task, deleteTask, deleteSeries } from '@/services/tasksService';
@@ -640,6 +641,9 @@ export default function WeeklyGrid() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* End-of-day reflection on the Day view, for today and earlier days */}
+      {viewMode === 'Day' && !!user && dateOffset <= 0 && <ReflectionCard date={firstDay} />}
 
       {viewMode === 'Month' ? (
         <SwipeNavigator axis="y" onNext={goToNext} onPrev={goToPrev}>
