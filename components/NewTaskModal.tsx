@@ -86,7 +86,8 @@ const monthDayFmt = new Intl.DateTimeFormat(locale, {
 function getOrdinalWeek(date: Date): string {
   const d = date.getDate();
   const weekNum = Math.ceil(d / 7);
-  const labels = ["first", "second", "third", "fourth", "fifth"];
+  // A 5th weekday repeats as the last one in each month (not every month has five)
+  const labels = ["first", "second", "third", "fourth", "last"];
   return labels[weekNum - 1] || `${weekNum}th`;
 }
 
