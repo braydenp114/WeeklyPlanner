@@ -12,12 +12,12 @@ import {
 
 import { useAuth } from '@/context/AuthContext';
 import { useNav } from '@/context/NavContext';
-import { NavIcon } from '@/components/NavIcon';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ListFilter, Menu, Repeat, X } from 'lucide-react-native';
 import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MonthlyGridView from './MonthlyGridView';
 import { SwipeNavigator, wasJustSwiped } from './SwipeNavigator';
+import { useStreaks } from '@/context/StreaksContext';
 import { getTasksForRange, Task, deleteTask, deleteSeries } from '@/services/tasksService';
 import { AnchorRect } from './ui/TimeDropdown';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -220,6 +220,7 @@ export default function WeeklyGrid() {
   const theme = Colors[scheme];
   const { user, loading: authLoading } = useAuth();
   const { isDesktop, setIsMobileMenuOpen, openNewTaskModal, taskRefreshKey } = useNav();
+  const { challenges } = useStreaks();
 
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -506,7 +507,7 @@ export default function WeeklyGrid() {
           </Text>
         )}
         {task.isRecurrenceInstance && isDesktop && height >= 44 && (
-          <MaterialIcons name="repeat" size={12} color="rgba(255,255,255,0.85)" style={styles.repeatIcon} />
+          <Repeat size={12} color="rgba(255,255,255,0.85)" strokeWidth={2.2} style={styles.repeatIcon} />
         )}
       </>
     );
@@ -523,7 +524,7 @@ export default function WeeklyGrid() {
               onPress={() => setIsMobileMenuOpen(true)}
               style={styles.iconButton}
             >
-              <NavIcon name="hamburger" size={22} color={theme.text} />
+              <Menu size={22} color={theme.text} strokeWidth={2} />
             </TouchableOpacity>
           )}
 
@@ -540,10 +541,10 @@ export default function WeeklyGrid() {
           {isDesktop && (
             <View style={styles.arrowGroup}>
               <TouchableOpacity activeOpacity={0.6} onPress={goToPrev} style={styles.iconButton}>
-                <MaterialIcons name="chevron-left" size={24} color={theme.textSecondary} />
+                <ChevronLeft size={22} color={theme.textSecondary} strokeWidth={2} />
               </TouchableOpacity>
               <TouchableOpacity activeOpacity={0.6} onPress={goToNext} style={styles.iconButton}>
-                <MaterialIcons name="chevron-right" size={24} color={theme.textSecondary} />
+                <ChevronRight size={22} color={theme.textSecondary} strokeWidth={2} />
               </TouchableOpacity>
             </View>
           )}
@@ -573,7 +574,7 @@ export default function WeeklyGrid() {
               }}
               style={[styles.pillButton, styles.pillWithIcon, { borderColor: theme.outline }, !isDesktop && styles.pillCompact]}
             >
-              <MaterialIcons name="filter-list" size={18} color={theme.textSecondary} />
+              <ListFilter size={17} color={theme.textSecondary} strokeWidth={2} />
               {isDesktop && <Text style={[styles.pillButtonText, { color: theme.text }]}>{completionFilter}</Text>}
             </TouchableOpacity>
             {isFilterOpen && (
@@ -604,7 +605,7 @@ export default function WeeklyGrid() {
               style={[styles.pillButton, styles.pillWithIcon, { borderColor: theme.outline }, !isDesktop && styles.pillCompact]}
             >
               <Text style={[styles.pillButtonText, { color: theme.text }]}>{viewMode}</Text>
-              <MaterialIcons name="arrow-drop-down" size={20} color={theme.textSecondary} />
+              <ChevronDown size={16} color={theme.textSecondary} strokeWidth={2} />
             </TouchableOpacity>
             {isDropdownOpen && (
               <View style={[styles.dropdownMenu, { backgroundColor: surface, borderColor: gridLineColor }]}>
@@ -630,10 +631,10 @@ export default function WeeklyGrid() {
       {/* Error Banner */}
       {tasksError && (
         <View style={[styles.errorBanner, { backgroundColor: theme.error + '22', borderColor: theme.error }]}>
-          <MaterialIcons name="error-outline" size={16} color={theme.error} />
+          <CircleAlert size={16} color={theme.error} strokeWidth={2} />
           <Text style={[styles.errorText, { color: theme.error }]}>{tasksError}</Text>
           <TouchableOpacity onPress={() => setTasksError(null)}>
-            <MaterialIcons name="close" size={16} color={theme.error} />
+            <X size={16} color={theme.error} strokeWidth={2} />
           </TouchableOpacity>
         </View>
       )}
@@ -656,6 +657,7 @@ export default function WeeklyGrid() {
               setIsDropdownOpen(false);
             }}
             onTaskClick={handleTaskClick}
+            streakBands={challenges.filter((c) => c.showOnCalendar)}
           />
         </SwipeNavigator>
       ) : (

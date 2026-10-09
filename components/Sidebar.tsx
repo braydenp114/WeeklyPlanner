@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Platform,
   Image,
+  ScrollView,
 } from "react-native";
 import { usePathname, router } from "expo-router";
 import { NavIcon, NavIconName } from "./NavIcon";
@@ -13,6 +14,8 @@ import { Colors, Typography, RoundedGeometry } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuth } from "@/context/AuthContext";
 import { useNav } from "@/context/NavContext";
+import { TodoSection } from "./sidebar/TodoSection";
+import { StreakSection } from "./sidebar/StreakSection";
 
 const NAV_ITEMS = [
   { name: "Weekly Grid", icon: "gridview", route: "/" },
@@ -98,6 +101,18 @@ export function Sidebar() {
           })}
         </View>
       </View>
+
+      {/* To-do list and streak challenges (signed-in users only) */}
+      {user && (
+        <ScrollView
+          style={styles.panels}
+          contentContainerStyle={styles.panelsContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <TodoSection />
+          <StreakSection />
+        </ScrollView>
+      )}
 
       <View style={styles.bottomSection}>
         {/* Settings */}
@@ -211,6 +226,15 @@ const styles = StyleSheet.create({
   },
   navText: {
     flex: 1,
+  },
+  panels: {
+    flex: 1,
+    marginVertical: 16,
+    marginHorizontal: -8,
+  },
+  panelsContent: {
+    gap: 16,
+    paddingBottom: 8,
   },
   bottomSection: {
     gap: 16,

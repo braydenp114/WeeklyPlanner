@@ -8,9 +8,12 @@ import {
   Animated,
   TouchableWithoutFeedback,
   Image,
+  ScrollView,
 } from "react-native";
 import { usePathname, router } from "expo-router";
 import { NavIcon, NavIconName } from "./NavIcon";
+import { TodoSection } from "./sidebar/TodoSection";
+import { StreakSection } from "./sidebar/StreakSection";
 import { Colors, Typography, RoundedGeometry } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuth } from "@/context/AuthContext";
@@ -122,6 +125,18 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
               })}
             </View>
           </View>
+
+          {/* To-do list and streak challenges, same as the desktop sidebar */}
+          {user && (
+            <ScrollView
+              style={styles.panels}
+              contentContainerStyle={styles.panelsContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <TodoSection />
+              <StreakSection />
+            </ScrollView>
+          )}
 
           <View style={styles.bottomSection}>
             <TouchableOpacity
@@ -264,6 +279,15 @@ const styles = StyleSheet.create({
   },
   navText: {
     flex: 1,
+  },
+  panels: {
+    flex: 1,
+    marginVertical: 16,
+    marginHorizontal: -8,
+  },
+  panelsContent: {
+    gap: 16,
+    paddingBottom: 8,
   },
   bottomSection: {
     gap: 16,

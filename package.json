@@ -34,6 +34,7 @@
     "expo-system-ui": "~57.0.2",
     "expo-web-browser": "~57.0.2",
     "firebase": "^12.17.1",
+    "lucide-react-native": "1.53.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "^0.86.2",

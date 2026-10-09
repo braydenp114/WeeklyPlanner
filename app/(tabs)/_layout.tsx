@@ -9,6 +9,7 @@ import { HamburgerMenu } from "@/components/HamburgerMenu";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import NewTaskModal from "@/components/NewTaskModal";
 import { NavProvider, useNav } from "@/context/NavContext";
+import { StreaksProvider } from "@/context/StreaksContext";
 
 function ResponsiveLayout() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -56,7 +57,9 @@ export default function TabLayout() {
 
   return (
     <NavProvider isDesktop={isDesktop}>
-      <ResponsiveLayout />
+      <StreaksProvider>
+        <ResponsiveLayout />
+      </StreaksProvider>
     </NavProvider>
   );
 }

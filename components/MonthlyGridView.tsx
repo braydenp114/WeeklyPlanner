@@ -4,6 +4,9 @@ import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { TaskItem, HoverableTaskCard, getPastEventStyle, formatShortTime } from './calendar-shared';
 import { AnchorRect } from './ui/TimeDropdown';
+import { getStreakIcon } from './streakIcons';
+import type { ChallengeWithSummary } from '@/context/StreaksContext';
+import { StreakDayStatus, toDayKey } from '@/utils/streakChallenge';
 
 interface MonthlyGridViewProps {
   dates: Date[]; // Should be a flat array of 35 or 42 dates covering the month
@@ -11,6 +14,33 @@ interface MonthlyGridViewProps {
   tasks: TaskItem[];
   onDayClick: (date: Date) => void;
   onTaskClick?: (task: TaskItem, anchor: AnchorRect) => void;
+  /** Streak challenges to draw as Duolingo-style bands (only those set to show on the calendar). */
+  streakBands?: ChallengeWithSummary[];
+}
+
+/** One run of consecutive streak days inside a week row. */
+interface BandSegment {
+  start: number; // column index 0-6
+  statuses: StreakDayStatus[]; // 'done' or 'grace' for each day in the run
+}
+
+/** Splits a week into runs of days that are part of the streak (checked in or held by grace). */
+function getBandSegments(week: Date[], days: Record<string, StreakDayStatus>): BandSegment[] {
+  const segments: BandSegment[] = [];
+  let current: BandSegment | null = null;
+  week.forEach((date, idx) => {
+    const status = days[toDayKey(date)];
+    if (status === 'done' || status === 'grace') {
+      if (!current) {
+        current = { start: idx, statuses: [] };
+        segments.push(current);
+      }
+      current.statuses.push(status);
+    } else {
+      current = null;
+    }
+  });
+  return segments;
 }
 
 const locale = Intl.DateTimeFormat().resolvedOptions().locale;
@@ -41,7 +71,7 @@ function isSameDay(date1: Date, date2: Date) {
  * with the columns, every week row shares the available height, all-day tasks are coloured
  * bars and timed tasks are a dot + time + title. Extra tasks collapse into "+N more".
  */
-export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick, onTaskClick }: MonthlyGridViewProps) {
+export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick, onTaskClick, streakBands = [] }: MonthlyGridViewProps) {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const [gridSize, setGridSize] = useState({ width: 0, height: 0 });
@@ -62,8 +92,12 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
   const rowHeight = gridSize.height / weeks.length;
   const isCompact = cellWidth > 0 && cellWidth < COMPACT_CELL_WIDTH;
   const rowSize = isCompact ? 16 : EVENT_ROW_HEIGHT;
-  // How many task rows fit in a cell (at least one)
-  const maxRows = rowHeight > 0 ? Math.max(1, Math.floor((rowHeight - CELL_HEADER_HEIGHT) / rowSize)) : 3;
+  const bandHeight = isCompact ? 14 : 20;
+  const bandsHeight = streakBands.length * bandHeight;
+  // How many task rows fit in a cell under the date and the streak bands (at least one)
+  const maxRows =
+    rowHeight > 0 ? Math.max(1, Math.floor((rowHeight - CELL_HEADER_HEIGHT - bandsHeight) / rowSize)) : 3;
+  const dotSize = isCompact ? 10 : 16;
 
   const getTasksForDate = (date: Date) =>
     tasks
@@ -123,6 +157,9 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
                     </View>
                   </View>
 
+                  {/* Room for the streak bands drawn over this row */}
+                  {bandsHeight > 0 && <View style={{ height: bandsHeight }} />}
+
                   {visibleTasks.map((task) => {
                     const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
                     const completed = !!task.originalTaskData.completed;
@@ -171,6 +208,55 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
                 </TouchableOpacity>
               );
             })}
+
+            {/* Streak bands: a soft strip over consecutive streak days, a filled dot with the
+                challenge icon on check-in days, and a dashed dot on grace days */}
+            {streakBands.length > 0 && (
+              <View pointerEvents="none" style={[styles.bandLayer, { top: CELL_HEADER_HEIGHT }]}>
+                {streakBands.map((challenge, bandIdx) => {
+                  const Icon = getStreakIcon(challenge.icon);
+                  return getBandSegments(week, challenge.summary.days).map((segment) => (
+                    <View
+                      key={`${challenge.id}-${segment.start}`}
+                      style={[
+                        styles.band,
+                        {
+                          top: bandIdx * bandHeight,
+                          height: bandHeight - 2,
+                          left: `${(segment.start / 7) * 100}%`,
+                          width: `${(segment.statuses.length / 7) * 100}%`,
+                        },
+                      ]}
+                    >
+                      <View style={[styles.bandStrip, { backgroundColor: challenge.colorHex + '2E' }]}>
+                        {segment.statuses.map((status, i) => (
+                          <View key={i} style={styles.bandDay}>
+                            {status === 'done' ? (
+                              <View
+                                style={[
+                                  styles.bandDot,
+                                  { width: dotSize, height: dotSize, borderRadius: dotSize / 2, backgroundColor: challenge.colorHex },
+                                ]}
+                              >
+                                {!isCompact && <Icon size={10} color="#FFFFFF" strokeWidth={2.5} />}
+                              </View>
+                            ) : (
+                              <View
+                                style={[
+                                  styles.bandDot,
+                                  styles.graceDot,
+                                  { width: dotSize, height: dotSize, borderRadius: dotSize / 2, borderColor: challenge.colorHex },
+                                ]}
+                              />
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  ));
+                })}
+              </View>
+            )}
           </View>
         ))}
       </View>
@@ -283,6 +369,33 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     paddingHorizontal: 4,
+  },
+  bandLayer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+  },
+  band: {
+    position: 'absolute',
+    paddingHorizontal: 3,
+  },
+  bandStrip: {
+    flex: 1,
+    flexDirection: 'row',
+    borderRadius: 999,
+  },
+  bandDay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bandDot: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  graceDot: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
   },
   emptyStateOverlay: {
     position: 'absolute',
