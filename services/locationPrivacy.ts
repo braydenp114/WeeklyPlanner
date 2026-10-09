@@ -13,8 +13,14 @@ interface LocationStore {
 }
 
 export function createLocationTracker({ store }: { store: LocationStore }) {
+  let sharing = true;
+
   return {
+    setSharing(value: boolean) {
+      sharing = value;
+    },
     record(userId: string, point: LocationPoint) {
+      if (!sharing) return;
       store.addPoint(userId, point);
     },
   };
