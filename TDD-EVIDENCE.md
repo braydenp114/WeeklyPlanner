@@ -40,6 +40,6 @@ Written down before T03 so the tests and the eventual real tracker share the sam
 ## T03: stores a new location point when sharing is on (AC1)
 - **Test code:** T03-a-test.png. Caption: checks that `createLocationTracker(...).record(userId, point)` adds the point to the store for that user.
 - **Failing:** T03-b-fail.png. Caption: fails because `createLocationTracker` doesn't exist yet.
-- **Code to pass:** T03-c-code.png. Caption: <fill in after green>
+- **Code to pass:** T03-c-code.png. Caption: adds `createLocationTracker`, whose `record` method just passes the point straight through to the store — no conditions yet.
 - **Passing:** T03-d-pass.png
 - **Commits:** <red hash> → <green hash>
