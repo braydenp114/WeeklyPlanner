@@ -11,6 +11,9 @@ import { buildTodayList, OVERDUE_LOOKBACK_DAYS } from '@/utils/todayList';
 import { formatShortTime } from '../calendar-shared';
 import { SidebarSection } from './SidebarSection';
 
+/** Overdue items shown before "Show all". */
+const OVERDUE_PREVIEW = 5;
+
 const dayFormatter = new Intl.DateTimeFormat(undefined, { weekday: 'short', day: 'numeric' });
 
 /**
@@ -24,6 +27,7 @@ export function TodaySection({ onOpenTask }: { onOpenTask?: () => void }) {
   const { taskRefreshKey, refreshTasks, openEditTaskModal } = useNav();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showAllOverdue, setShowAllOverdue] = useState(false);
 
   const reload = useCallback(async () => {
     const end = new Date();
@@ -106,7 +110,14 @@ export function TodaySection({ onOpenTask }: { onOpenTask?: () => void }) {
       {overdue.length > 0 && (
         <>
           <Text style={[styles.groupLabel, { color: theme.error }]}>Overdue</Text>
-          {overdue.map((t) => renderItem(t, true))}
+          {(showAllOverdue ? overdue : overdue.slice(0, OVERDUE_PREVIEW)).map((t) => renderItem(t, true))}
+          {overdue.length > OVERDUE_PREVIEW && (
+            <TouchableOpacity onPress={() => setShowAllOverdue(!showAllOverdue)} style={styles.moreToggle}>
+              <Text style={[styles.moreText, { color: theme.textSecondary }]}>
+                {showAllOverdue ? 'Show less' : `Show all (${overdue.length})`}
+              </Text>
+            </TouchableOpacity>
+          )}
         </>
       )}
     </SidebarSection>
@@ -151,6 +162,15 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     paddingHorizontal: 12,
     paddingTop: 6,
+  },
+  moreToggle: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  moreText: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    fontWeight: '500',
   },
   note: {
     fontFamily: Fonts.body,

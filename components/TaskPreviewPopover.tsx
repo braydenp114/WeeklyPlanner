@@ -279,6 +279,7 @@ export function TaskPreviewPopover({
               <View style={{ flex: 1 }} />
               <TouchableOpacity
                 onPress={() => onEdit(task)}
+                accessibilityLabel="Edit task"
                 style={styles.iconBtn}
               >
                 <MaterialIcons
@@ -289,6 +290,7 @@ export function TaskPreviewPopover({
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => onDelete(task)}
+                accessibilityLabel="Delete task"
                 style={styles.iconBtn}
               >
                 <MaterialIcons
@@ -297,7 +299,7 @@ export function TaskPreviewPopover({
                   color={theme.onSurfaceVariant}
                 />
               </TouchableOpacity>
-              <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
+              <TouchableOpacity onPress={onClose} style={styles.iconBtn} accessibilityLabel="Close">
                 <MaterialIcons
                   name="close"
                   size={20}
