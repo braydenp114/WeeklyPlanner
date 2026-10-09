@@ -20,4 +20,14 @@ describe('location privacy', () => {
       { latitude: -36.85, longitude: 174.76, timestamp: 1 },
     ]);
   });
+
+  it('4. ignores new location points after sharing is turned off', () => {
+    const store = createMemoryStore();
+    const tracker = createLocationTracker({ store });
+
+    tracker.setSharing(false);
+    tracker.record('user1', { latitude: -36.85, longitude: 174.76, timestamp: 2 });
+
+    expect(store.getPoints('user1')).toEqual([]);
+  });
 });

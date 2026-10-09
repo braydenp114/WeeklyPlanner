@@ -42,4 +42,11 @@ Written down before T03 so the tests and the eventual real tracker share the sam
 - **Failing:** T03-b-fail.png. Caption: fails because `createLocationTracker` doesn't exist yet.
 - **Code to pass:** T03-c-code.png. Caption: adds `createLocationTracker`, whose `record` method just passes the point straight through to the store — no conditions yet.
 - **Passing:** T03-d-pass.png
+- **Commits:** aa678b3 → 3608e1a
+
+## T04: ignores new location points after sharing is turned off (AC1)
+- **Test code:** T04-a-test.png. Caption: checks that after calling `setSharing(false)`, `record(...)` no longer adds anything to the store.
+- **Failing:** T04-b-fail.png. Caption: fails because the tracker has no `setSharing` method yet.
+- **Code to pass:** T04-c-code.png. Caption: <fill in after green>
+- **Passing:** T04-d-pass.png
 - **Commits:** <red hash> → <green hash>
