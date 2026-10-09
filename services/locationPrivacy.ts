@@ -12,12 +12,21 @@ interface LocationStore {
   addPoint(userId: string, point: LocationPoint): void;
 }
 
-export function createLocationTracker({ store }: { store: LocationStore }) {
+export function createLocationTracker({
+  store,
+  stopWatcher,
+}: {
+  store: LocationStore;
+  stopWatcher?: () => void;
+}) {
   let sharing = true;
 
   return {
     setSharing(value: boolean) {
       sharing = value;
+      if (!value && stopWatcher) {
+        stopWatcher();
+      }
     },
     record(userId: string, point: LocationPoint) {
       if (!sharing) return;
