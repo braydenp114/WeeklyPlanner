@@ -28,6 +28,10 @@ import {
   StreakResult,
 } from "@/utils/streaks";
 import { getWeatherForTask, WeatherResult } from "@/services/weatherService";
+import { Flag, Timer } from "lucide-react-native";
+import { useFocus } from "@/context/FocusContext";
+import { FOCUS_TARGET_MINUTES, formatMinutes } from "@/utils/focus";
+import { PRIORITY_META } from "@/utils/priority";
 
 interface TaskPreviewPopoverProps {
   visible: boolean;
@@ -80,6 +84,7 @@ export function TaskPreviewPopover({
   const [actualNoteText, setActualNoteText] = useState("");
   const [savingActual, setSavingActual] = useState(false);
   const [streak, setStreak] = useState<StreakResult | null>(null);
+  const { session: focusSession, start: startFocus } = useFocus();
 
   // Fetches the series and recalculates the streak (null if the task is not streak-eligible)
   const fetchStreak = async (): Promise<StreakResult | null> => {
@@ -349,6 +354,57 @@ export function TaskPreviewPopover({
                 </Text>
               </View>
             )}
+
+            {/* Priority */}
+            {tData.priority && PRIORITY_META[tData.priority] && (
+              <View style={styles.row}>
+                <View style={styles.lucideIcon}>
+                  <Flag
+                    size={16}
+                    color={PRIORITY_META[tData.priority].colorHex}
+                    fill={PRIORITY_META[tData.priority].colorHex}
+                  />
+                </View>
+                <Text style={[styles.detailText, { color: theme.text }]}>
+                  {`${PRIORITY_META[tData.priority].label} ${PRIORITY_META[tData.priority].name}`}
+                </Text>
+              </View>
+            )}
+
+            {/* Focus timer */}
+            <View style={[styles.row, { alignItems: "center" }]}>
+              <View style={styles.lucideIcon}>
+                <Timer size={16} color={theme.onSurfaceVariant} />
+              </View>
+              <Text style={[styles.detailText, { color: theme.text }]}>
+                {tData.actualMinutes
+                  ? `Focused ${formatMinutes(tData.actualMinutes)}`
+                  : "No focus time yet"}
+              </Text>
+              {focusSession?.taskId === task.originalTaskId ? (
+                <Text style={[styles.focusingText, { color: theme.primaryAction }]}>
+                  Focusing…
+                </Text>
+              ) : (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Start focus timer"
+                  style={[styles.focusBtn, { borderColor: theme.outlineVariant }]}
+                  onPress={() => {
+                    startFocus({
+                      id: task.originalTaskId,
+                      title: task.title,
+                      colorHex: task.colorHex,
+                    });
+                    onClose();
+                  }}
+                >
+                  <Text style={[styles.focusBtnText, { color: theme.primaryAction }]}>
+                    {`Start focus · ${FOCUS_TARGET_MINUTES} min`}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* Location */}
             {tData.location && (
@@ -673,6 +729,27 @@ const styles = StyleSheet.create({
   },
   iconPlaceholder: {
     width: 18,
+  },
+  lucideIcon: {
+    width: 18,
+    marginTop: 2,
+    alignItems: "center",
+  },
+  focusBtn: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  focusBtnText: {
+    fontFamily: Fonts.body,
+    fontSize: Typography.labelSm.fontSize,
+    fontWeight: "600",
+  },
+  focusingText: {
+    fontFamily: Fonts.body,
+    fontSize: Typography.labelSm.fontSize,
+    fontWeight: "600",
   },
   timeText: {
     fontFamily: Fonts.body,

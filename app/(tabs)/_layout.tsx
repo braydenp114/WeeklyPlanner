@@ -11,6 +11,8 @@ import NewTaskModal from "@/components/NewTaskModal";
 import { NavProvider, useNav } from "@/context/NavContext";
 import { StreaksProvider } from "@/context/StreaksContext";
 import { useReminderSync } from "@/hooks/use-task-reminders";
+import { FocusProvider } from "@/context/FocusContext";
+import { FocusBar } from "@/components/FocusBar";
 
 function ResponsiveLayout() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -34,6 +36,7 @@ function ResponsiveLayout() {
       <View style={styles.mainContent}>
         <Slot />
         {showFAB && <FloatingActionButton onPress={() => openNewTaskModal()} />}
+        <FocusBar bottomOffset={isDesktop ? 24 : 96} />
       </View>
 
       {!isDesktop && (
@@ -61,7 +64,9 @@ export default function TabLayout() {
   return (
     <NavProvider isDesktop={isDesktop}>
       <StreaksProvider>
-        <ResponsiveLayout />
+        <FocusProvider>
+          <ResponsiveLayout />
+        </FocusProvider>
       </StreaksProvider>
     </NavProvider>
   );
