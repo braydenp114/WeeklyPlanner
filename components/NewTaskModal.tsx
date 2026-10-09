@@ -34,6 +34,7 @@ import {
   createTask,
   updateTask,
   updateSeries,
+  replaceRecurrence,
   CreateTaskData,
   TaskRecurrence,
   BusyStatus,
@@ -86,7 +87,8 @@ const monthDayFmt = new Intl.DateTimeFormat(locale, {
 function getOrdinalWeek(date: Date): string {
   const d = date.getDate();
   const weekNum = Math.ceil(d / 7);
-  const labels = ["first", "second", "third", "fourth", "fifth"];
+  // A 5th weekday repeats as the last one in each month (not every month has five)
+  const labels = ["first", "second", "third", "fourth", "last"];
   return labels[weekNum - 1] || `${weekNum}th`;
 }
 
@@ -582,8 +584,19 @@ export default function NewTaskModal({
         linkedDeadlineId: !isDeadline ? linkedDeadlineId : null,
       };
 
+      // Did the user change the Repeat setting while editing?
+      const repeatChanged =
+        !!editTaskData &&
+        (editTaskData.recurrence !== recurrence ||
+          (recurrence === "custom" &&
+            JSON.stringify(editTaskData.customRecurrenceRule) !==
+              JSON.stringify(customRecurrenceRule)));
+
       if (editTaskData && editTaskData.id) {
-        if (editTaskScope === "all" && editTaskData.seriesId) {
+        if (repeatChanged) {
+          // Regenerate occurrences from this task onwards with the new repeat rule
+          await replaceRecurrence(editTaskData, taskData);
+        } else if (editTaskScope === "all" && editTaskData.seriesId) {
           const origStartMs = editTaskData.startDate.toDate().getTime();
 
           const newStartMs = startDate.getTime();
@@ -608,6 +621,7 @@ export default function NewTaskModal({
       onSaved?.();
       onClose();
     } catch (e: any) {
+      console.error("[NewTaskModal] Failed to save task:", e);
       setError(e.message || "Failed to save task");
     } finally {
       setSaving(false);
