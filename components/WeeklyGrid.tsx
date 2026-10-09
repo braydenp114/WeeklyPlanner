@@ -18,6 +18,7 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import MonthlyGridView from './MonthlyGridView';
 import { SwipeNavigator, wasJustSwiped } from './SwipeNavigator';
 import { ReflectionCard } from './ReflectionCard';
+import { RolloverBanner } from './RolloverBanner';
 import { useStreaks } from '@/context/StreaksContext';
 import { PRIORITY_META } from '@/utils/priority';
 import { getTasksForRange, Task, deleteTask, deleteSeries } from '@/services/tasksService';
@@ -641,6 +642,9 @@ export default function WeeklyGrid() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Carry over last week's unfinished tasks (only on this week's Week view) */}
+      {viewMode === 'Week' && dateOffset === 0 && !!user && <RolloverBanner />}
 
       {/* End-of-day reflection on the Day view, for today and earlier days */}
       {viewMode === 'Day' && !!user && dateOffset <= 0 && <ReflectionCard date={firstDay} />}

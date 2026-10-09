@@ -3,7 +3,7 @@ import type { Timestamp } from 'firebase/firestore';
 import type { Task } from '@/services/tasksService';
 import { comparePriority } from '../priority';
 import { planReminders, REMINDER_ID_PREFIX } from '../reminders';
-import { findUnfinishedFromLastWeek, shiftOneWeek, startOfWeek, weekKey } from '../rollover';
+import { findUnfinishedFromLastWeek, rolloverTarget, shiftOneWeek, startOfWeek, weekKey } from '../rollover';
 import { focusedMinutes, formatElapsed, formatMinutes } from '../focus';
 import { averageMood } from '../reflection';
 
@@ -94,5 +94,16 @@ describe('reflection', () => {
   test('average mood of the week', () => {
     expect(averageMood([{ day: 'a', mood: 4, note: '' }, { day: 'b', mood: 5, note: '' }])).toBe(4.5);
     expect(averageMood([])).toBeNull();
+  });
+});
+
+describe('rolloverTarget', () => {
+  test('keeps the same weekday this week when it is still ahead', () => {
+    // Sat 3 Oct 10:00 -> Sat 10 Oct 10:00 (NOW is Fri 9 Oct)
+    expect(rolloverTarget(new Date(2026, 9, 3, 10), NOW)).toEqual(new Date(2026, 9, 10, 10));
+  });
+  test('moves to today, same time, when that weekday already passed', () => {
+    // Mon 28 Sep 14:30 -> would be Mon 5 Oct (past) -> Fri 9 Oct 14:30
+    expect(rolloverTarget(new Date(2026, 8, 28, 14, 30), NOW)).toEqual(new Date(2026, 9, 9, 14, 30));
   });
 });

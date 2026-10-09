@@ -46,3 +46,17 @@ export function shiftOneWeek(date: Date): Date {
   d.setDate(d.getDate() + 7);
   return d;
 }
+
+/**
+ * Where a carried-over task lands: same weekday and time this week, or today
+ * (same time of day) if that weekday has already passed.
+ */
+export function rolloverTarget(start: Date, now: Date = new Date()): Date {
+  const shifted = shiftOneWeek(start);
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  if (shifted >= todayStart) return shifted;
+  const target = new Date(now);
+  target.setHours(start.getHours(), start.getMinutes(), 0, 0);
+  return target;
+}
