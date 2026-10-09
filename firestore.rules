@@ -21,5 +21,11 @@ service cloud.firestore {
       allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
     }
+
+    // End-of-day reflections (mood 1-5 and a short note, one per day)
+    match /reflections/{reflectionId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+    }
   }
 }

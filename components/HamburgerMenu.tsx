@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { usePathname, router } from "expo-router";
 import { NavIcon, NavIconName } from "./NavIcon";
+import { TodaySection } from "./sidebar/TodaySection";
 import { TodoSection } from "./sidebar/TodoSection";
 import { StreakSection } from "./sidebar/StreakSection";
 import { Colors, Typography, RoundedGeometry } from "@/constants/theme";
@@ -126,13 +127,14 @@ export function HamburgerMenu({ visible, onClose }: HamburgerMenuProps) {
             </View>
           </View>
 
-          {/* To-do list and streak challenges, same as the desktop sidebar */}
+          {/* Today, to-do list and streak challenges, same as the desktop sidebar */}
           {user && (
             <ScrollView
               style={styles.panels}
               contentContainerStyle={styles.panelsContent}
               showsVerticalScrollIndicator={false}
             >
+              <TodaySection onOpenTask={onClose} />
               <TodoSection />
               <StreakSection />
             </ScrollView>

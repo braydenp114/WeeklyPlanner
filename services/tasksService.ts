@@ -10,10 +10,10 @@ import {
   Timestamp,
   serverTimestamp,
   writeBatch,
+  increment,
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { generateOccurrenceDates, getRecurrenceEndBound, MAX_OCCURRENCES_PER_TASK } from '../utils/expandRecurrences';
-import { scheduleReminder } from '../hooks/use-task-reminders';
 
 export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekday' | 'custom';
 export type BusyStatus = 'busy' | 'free';
@@ -75,6 +75,10 @@ export interface Task {
   actualNote?: string | null;
   /** Set automatically when a recurring task is saved, so its occurrences count towards a streak. */
   streakEligible?: boolean;
+  /** Importance flag like Todoist: 1 = highest. null/undefined = no priority. */
+  priority?: 1 | 2 | 3 | null;
+  /** Minutes actually spent on this task, logged with the focus timer. */
+  actualMinutes?: number;
 }
 
 export type CreateTaskData = Omit<Task, 'id' | 'ownerId' | 'createdAt'>;
@@ -106,8 +110,8 @@ export async function createTask(data: CreateTaskData): Promise<string> {
   };
 
   if (data.recurrence === 'none') {
+    // Reminders are scheduled by useReminderSync after the task list refreshes
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
-    await scheduleReminder(data);
     return docRef.id;
   }
 
@@ -544,12 +548,26 @@ export async function logTaskActual(id: string, params: LogActualParams): Promis
   });
 }
 
+/**
+ * Adds focus-timer minutes to a task. Uses Firestore's increment so two sessions
+ * (or two devices) never overwrite each other.
+ */
+export async function addFocusMinutes(id: string, minutes: number): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+  if (minutes <= 0) return;
+
+  await updateDoc(doc(db, TASKS_COLLECTION, id), { actualMinutes: increment(minutes) });
+}
+
 export interface CategoryReviewStats {
   category: string;
   plannedHours: number;
   completedAsPlannedHours: number;
   substitutedCount: number;
   unloggedCount: number;
+  /** Hours actually spent, from the focus timer. */
+  focusedHours: number;
 }
 
 /**
@@ -570,9 +588,11 @@ export function calculateWeeklyReview(tasks: Task[]): CategoryReviewStats[] {
         completedAsPlannedHours: 0,
         substitutedCount: 0,
         unloggedCount: 0,
+        focusedHours: 0,
       });
     }
     const stats = statsByCategory.get(category)!;
+    stats.focusedHours += (task.actualMinutes ?? 0) / 60;
 
     const durationHours =
       (task.endDate.toDate().getTime() - task.startDate.toDate().getTime()) / (1000 * 60 * 60);

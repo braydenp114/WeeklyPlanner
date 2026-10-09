@@ -17,6 +17,12 @@ import {
   CategoryReviewStats,
 } from "@/services/tasksService";
 import { calculateGoalGap } from "@/utils/weekly-goal";
+import { getReflections } from "@/services/reflectionsService";
+import { averageMood, DailyReflection, MOOD_LABELS } from "@/utils/reflection";
+import { toDayKey } from "@/utils/streakChallenge";
+import { MOOD_COLORS, MOOD_ICONS } from "@/components/moodIcons";
+
+const weekdayFmt = new Intl.DateTimeFormat(undefined, { weekday: "short" });
 
 function getStartOfWeek(date: Date) {
   const result = new Date(date);
@@ -35,6 +41,8 @@ export default function AnalyticsScreen() {
   const [stats, setStats] = useState<CategoryReviewStats[]>([]);
   const [loading, setLoading] = useState(false);
   const [goalTargets, setGoalTargets] = useState<Record<string, string>>({});
+  const [weekDays, setWeekDays] = useState<Date[]>([]);
+  const [reflections, setReflections] = useState<DailyReflection[]>([]);
 
   const loadReview = useCallback(async () => {
     if (!user) return;
@@ -47,6 +55,20 @@ export default function AnalyticsScreen() {
 
       const tasks = await getTasksForRange(start, end);
       setStats(calculateWeeklyReview(tasks));
+
+      const days = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        return d;
+      });
+      setWeekDays(days);
+      // Reflections are optional: the review still shows if they fail to load
+      try {
+        setReflections(await getReflections(toDayKey(days[0]), toDayKey(days[6])));
+      } catch (e) {
+        console.error("[AnalyticsScreen] Failed to load reflections:", e);
+        setReflections([]);
+      }
     } catch (e) {
       console.error("[AnalyticsScreen] Failed to load review:", e);
     } finally {
@@ -71,6 +93,57 @@ export default function AnalyticsScreen() {
             color={theme.primaryAction}
             style={{ marginTop: 20 }}
           />
+        )}
+
+        {/* Mood across the week, from the end-of-day reflections on the Day view */}
+        {!loading && weekDays.length > 0 && (
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: theme.surfaceContainer, borderColor: theme.outlineVariant },
+            ]}
+          >
+            <Text style={[styles.categoryName, { color: theme.text }]}>Mood this week</Text>
+            <View style={styles.moodWeekRow}>
+              {weekDays.map((d) => {
+                const r = reflections.find((x) => x.day === toDayKey(d));
+                const Icon = r ? MOOD_ICONS[r.mood] : null;
+                return (
+                  <View key={d.toISOString()} style={styles.moodDay}>
+                    <Text style={[styles.moodDayName, { color: theme.textSecondary }]}>
+                      {weekdayFmt.format(d)}
+                    </Text>
+                    {Icon && r ? (
+                      <Icon size={22} color={MOOD_COLORS[r.mood]} strokeWidth={2} />
+                    ) : (
+                      <View style={[styles.moodEmpty, { borderColor: theme.outlineVariant }]} />
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+            {reflections.length === 0 ? (
+              <Text style={[styles.statLine, { color: theme.textMuted }]}>
+                No reflections yet. Open a day in Day view to add one.
+              </Text>
+            ) : (
+              <>
+                <Text style={[styles.statLine, { color: theme.textSecondary }]}>
+                  Average mood: {averageMood(reflections)?.toFixed(1)} / 5
+                </Text>
+                {reflections
+                  .filter((r) => r.note)
+                  .map((r) => {
+                    const [y, m, dd] = r.day.split("-").map(Number);
+                    return (
+                      <Text key={r.day} style={[styles.statLine, { color: theme.textSecondary }]}>
+                        {`${weekdayFmt.format(new Date(y, m - 1, dd))} · ${MOOD_LABELS[r.mood]}: ${r.note}`}
+                      </Text>
+                    );
+                  })}
+              </>
+            )}
+          </View>
         )}
 
         {!loading && stats.length === 0 && (
@@ -105,6 +178,9 @@ export default function AnalyticsScreen() {
                   Completed as planned: {s.completedAsPlannedHours.toFixed(1)}h
                   {s.plannedHours > 0 &&
                     ` (${Math.round((s.completedAsPlannedHours / s.plannedHours) * 100)}%)`}
+                </Text>
+                <Text style={[styles.statLine, { color: theme.textSecondary }]}>
+                  Focused: {s.focusedHours.toFixed(1)}h
                 </Text>
                 <Text style={[styles.statLine, { color: theme.textSecondary }]}>
                   Substituted: {s.substitutedCount}
@@ -199,6 +275,27 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     width: 60,
     textAlign: "center",
+  },
+  moodWeekRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginVertical: 6,
+  },
+  moodDay: {
+    alignItems: "center",
+    gap: 4,
+    flex: 1,
+  },
+  moodDayName: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+  },
+  moodEmpty: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
   },
   pendingText: {
     fontFamily: Fonts.body,
