@@ -30,4 +30,14 @@ describe('location privacy', () => {
 
     expect(store.getPoints('user1')).toEqual([]);
   });
+
+  it('5. stops the location watcher when sharing is turned off', () => {
+    const store = createMemoryStore();
+    const stopWatcher = jest.fn();
+    const tracker = createLocationTracker({ store, stopWatcher });
+
+    tracker.setSharing(false);
+
+    expect(stopWatcher).toHaveBeenCalledTimes(1);
+  });
 });
