@@ -14,6 +14,7 @@ import { Colors, Typography, RoundedGeometry } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuth } from "@/context/AuthContext";
 import { useNav } from "@/context/NavContext";
+import { TodaySection } from "./sidebar/TodaySection";
 import { TodoSection } from "./sidebar/TodoSection";
 import { StreakSection } from "./sidebar/StreakSection";
 
@@ -102,13 +103,14 @@ export function Sidebar() {
         </View>
       </View>
 
-      {/* To-do list and streak challenges (signed-in users only) */}
+      {/* Today, to-do list and streak challenges (signed-in users only) */}
       {user && (
         <ScrollView
           style={styles.panels}
           contentContainerStyle={styles.panelsContent}
           showsVerticalScrollIndicator={false}
         >
+          <TodaySection />
           <TodoSection />
           <StreakSection />
         </ScrollView>
