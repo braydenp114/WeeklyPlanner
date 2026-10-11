@@ -720,11 +720,12 @@ export default function WeeklyGrid() {
                       .filter((t) => t.dayIndex === dayIdx)
                       .map((task) => {
                         const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
+                        const isCompleted = !!task.originalTaskData.completed;
                         return (
                           <HoverableTaskCard
                             key={task.id}
                             task={task}
-                            style={[styles.allDayChip, getPastEventStyle(isPast, task.colorHex)]}
+                            style={[styles.allDayChip, getPastEventStyle(isPast || isCompleted, task.colorHex)]}
                             onPress={handleTaskClick}
                           >
                             <Text
@@ -782,6 +783,7 @@ export default function WeeklyGrid() {
                         const maxCols = layout?.maxCols || 1;
                         const height = Math.max(task.durationHours * ROW_HEIGHT - 2, 18);
                         const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
+                        const isCompleted = !!task.originalTaskData.completed;
 
                         return (
                           <HoverableTaskCard
@@ -789,7 +791,7 @@ export default function WeeklyGrid() {
                             task={task}
                             style={[
                               styles.taskCard,
-                              getPastEventStyle(isPast, task.colorHex),
+                              getPastEventStyle(isPast || isCompleted, task.colorHex),
                               {
                                 top: task.startHour * ROW_HEIGHT + 1,
                                 height,

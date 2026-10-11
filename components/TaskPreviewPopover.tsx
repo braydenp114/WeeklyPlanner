@@ -149,7 +149,7 @@ export function TaskPreviewPopover({
     const next = !completed;
     setCompleted(next);
     try {
-      await updateTask(task.originalTaskId, { completed: next });
+      await updateTask(task.originalTaskId, { completed: next, completedBy: next ? 'manual' : null });
       await loadStreak();
       onChanged?.();
     } catch {
