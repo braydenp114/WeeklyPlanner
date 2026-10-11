@@ -117,17 +117,17 @@ npx tsc --noEmit
 
 ### 1. Planning
 - [x] Weekly grid view
-- [ ] Task checkbox completion
-- [ ] Recurring tasks (daily, weekly, custom days)
+- [x] Task checkbox completion
+- [x] Recurring tasks (daily, weekly, custom days)
 - [ ] Category-specific goal tracking & gap metrics
-- [ ] Impending deadline warnings & alerts
+- [x] Impending deadline warnings & alerts
 - [ ] Travel time calculations between location-bound tasks
 
 ### 2. Verification & Analytics
 - [ ] Geofencing completion detection
-- [ ] Task logging with post-event outcome flips (completed, done differently, skipped)
+- [x] Task logging with post-event outcome flips (completed, done differently, skipped)
 - [ ] Screen time and step count integration
-- [ ] Weekly summary reports (Planned vs. Actual comparison)
+- [x] Weekly summary reports (Planned vs. Actual comparison)
 - [ ] Streak trackers with grace-period rules
 
 ---

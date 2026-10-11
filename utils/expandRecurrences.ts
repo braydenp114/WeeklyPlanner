@@ -89,17 +89,48 @@ function* generateWeekly(start: Date, endBound: Date): Generator<Date> {
   }
 }
 
+/**
+ * Which occurrence of its weekday a date is within its month:
+ * 1 = first, 2 = second, ... 5 = fifth (the 29th to 31st).
+ */
+export function getWeekdayOrdinal(date: Date): number {
+  return Math.ceil(date.getDate() / 7);
+}
+
+/**
+ * Returns the nth given weekday of a month, e.g. the 1st Wednesday of November.
+ * Not every month has a fifth weekday, so n = 5 means "the last one in the month".
+ * The month index can overflow (e.g. 13), Date handles the year rollover.
+ */
+export function getNthWeekdayOfMonth(year: number, month: number, weekday: number, n: number): Date {
+  if (n >= 5) {
+    const lastDay = new Date(year, month + 1, 0);
+    const diff = (lastDay.getDay() - weekday + 7) % 7;
+    return new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate() - diff);
+  }
+  const firstDay = new Date(year, month, 1);
+  const offset = (weekday - firstDay.getDay() + 7) % 7;
+  return new Date(firstDay.getFullYear(), firstDay.getMonth(), 1 + offset + (n - 1) * 7);
+}
+
+/**
+ * "Monthly on the first Wednesday": repeats on the same weekday position every month,
+ * which is what the Repeat dropdown label promises (not the same calendar date).
+ */
 function* generateMonthly(start: Date, endBound: Date): Generator<Date> {
-  const originalDay = start.getDate();
-  const current = new Date(start);
+  const weekday = start.getDay();
+  const ordinal = getWeekdayOrdinal(start);
   let count = 0;
-  while (current <= endBound && count < MAX_OCCURRENCES_PER_TASK) {
-    yield new Date(current);
-    current.setMonth(current.getMonth() + 1);
-    // Clamp day to month length (e.g. Jan 31 → Feb 28)
-    const maxDay = new Date(current.getFullYear(), current.getMonth() + 1, 0).getDate();
-    current.setDate(Math.min(originalDay, maxDay));
-    count++;
+  let monthOffset = 0;
+  while (count < MAX_OCCURRENCES_PER_TASK) {
+    const occ = getNthWeekdayOfMonth(start.getFullYear(), start.getMonth() + monthOffset, weekday, ordinal);
+    occ.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), start.getMilliseconds());
+    if (occ > endBound) break;
+    if (occ >= start) {
+      yield occ;
+      count++;
+    }
+    monthOffset++;
   }
 }
 

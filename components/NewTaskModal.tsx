@@ -37,6 +37,7 @@ import {
   createTask,
   updateTask,
   updateSeries,
+  replaceRecurrence,
   CreateTaskData,
   TaskRecurrence,
   BusyStatus,
@@ -46,6 +47,7 @@ import {
   getUpcomingDeadlines,
 } from "@/services/tasksService";
 import { CalendarPicker } from "./ui/CalendarPicker";
+import { Priority, PRIORITY_META } from "@/utils/priority";
 import { TimeDropdown, AnchorRect } from "./ui/TimeDropdown";
 import { CustomRecurrenceModal } from "./CustomRecurrenceModal";
 import {
@@ -90,7 +92,8 @@ const monthDayFmt = new Intl.DateTimeFormat(locale, {
 function getOrdinalWeek(date: Date): string {
   const d = date.getDate();
   const weekNum = Math.ceil(d / 7);
-  const labels = ["first", "second", "third", "fourth", "fifth"];
+  // A 5th weekday repeats as the last one in each month (not every month has five)
+  const labels = ["first", "second", "third", "fourth", "last"];
   return labels[weekNum - 1] || `${weekNum}th`;
 }
 
@@ -213,6 +216,7 @@ export default function NewTaskModal({
   >([]);
   const [colorHex, setColorHex] = useState(COLOR_OPTIONS[0].hex);
   const [category, setCategory] = useState<string>("Study");
+  const [priority, setPriority] = useState<Priority | null>(null);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([
     "Study",
     "Workout",
@@ -450,6 +454,7 @@ export default function NewTaskModal({
         } else {
           setCategory("Study");
         }
+        setPriority(editTaskData.priority ?? null);
         setBusyStatus(editTaskData.busyStatus);
         setVisibility(editTaskData.visibility);
         setDescription(editTaskData.description || "");
@@ -485,6 +490,7 @@ export default function NewTaskModal({
         setCategory("Study");
         setShowCustomCategoryInput(false);
         setCustomCategoryText("");
+        setPriority(null);
         setBusyStatus("busy");
         setVisibility("default");
         setDescription("");
@@ -576,6 +582,7 @@ export default function NewTaskModal({
         description: description.trim() || null,
         colorHex,
         category: category || null,
+        priority,
         completed: editTaskData?.completed ?? false,
         hasChecklist,
         checklistItems: hasChecklist ? trimmedChecklistItems : [],
@@ -586,8 +593,19 @@ export default function NewTaskModal({
         linkedDeadlineId: !isDeadline ? linkedDeadlineId : null,
       };
 
+      // Did the user change the Repeat setting while editing?
+      const repeatChanged =
+        !!editTaskData &&
+        (editTaskData.recurrence !== recurrence ||
+          (recurrence === "custom" &&
+            JSON.stringify(editTaskData.customRecurrenceRule) !==
+              JSON.stringify(customRecurrenceRule)));
+
       if (editTaskData && editTaskData.id) {
-        if (editTaskScope === "all" && editTaskData.seriesId) {
+        if (repeatChanged) {
+          // Regenerate occurrences from this task onwards with the new repeat rule
+          await replaceRecurrence(editTaskData, taskData);
+        } else if (editTaskScope === "all" && editTaskData.seriesId) {
           const origStartMs = editTaskData.startDate.toDate().getTime();
 
           const newStartMs = startDate.getTime();
@@ -654,6 +672,7 @@ export default function NewTaskModal({
       onSaved?.();
       onClose();
     } catch (e: any) {
+      console.error("[NewTaskModal] Failed to save task:", e);
       setError(e.message || "Failed to save task");
     } finally {
       setSaving(false);
@@ -673,6 +692,7 @@ export default function NewTaskModal({
     description,
     colorHex,
     category,
+    priority,
     hasChecklist,
     checklistItems,
     isDeadline,
@@ -1271,6 +1291,49 @@ export default function NewTaskModal({
                       </TouchableOpacity>
                     </View>
                   )}
+                </View>
+              </View>
+
+              {/* Priority (P1 = most important) */}
+              <View style={[styles.fieldSection, { zIndex: 6 }]}>
+                <View style={styles.fieldIcon}>
+                  <MaterialIcons
+                    name="flag"
+                    size={20}
+                    color={priority ? PRIORITY_META[priority].colorHex : theme.onSurfaceVariant}
+                  />
+                </View>
+                <View style={{ flex: 1, flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+                  {([null, 1, 2, 3] as (Priority | null)[]).map((p) => {
+                    const selected = priority === p;
+                    const color = p ? PRIORITY_META[p].colorHex : theme.textSecondary;
+                    return (
+                      <TouchableOpacity
+                        key={p ?? "none"}
+                        onPress={() => setPriority(p)}
+                        accessibilityLabel={p ? `Priority ${PRIORITY_META[p].label}` : "No priority"}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: RoundedGeometry.full,
+                          borderWidth: 1,
+                          borderColor: selected ? color : theme.outlineVariant,
+                          backgroundColor: selected ? color : "transparent",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: Fonts.body,
+                            fontSize: 13,
+                            fontWeight: "600",
+                            color: selected ? "#FFFFFF" : color,
+                          }}
+                        >
+                          {p ? `${PRIORITY_META[p].label} ${PRIORITY_META[p].name}` : "No priority"}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
 

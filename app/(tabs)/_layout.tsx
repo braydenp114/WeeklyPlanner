@@ -9,6 +9,10 @@ import { HamburgerMenu } from "@/components/HamburgerMenu";
 import { FloatingActionButton } from "@/components/FloatingActionButton";
 import NewTaskModal from "@/components/NewTaskModal";
 import { NavProvider, useNav } from "@/context/NavContext";
+import { StreaksProvider } from "@/context/StreaksContext";
+import { useReminderSync } from "@/hooks/use-task-reminders";
+import { FocusProvider } from "@/context/FocusContext";
+import { FocusBar } from "@/components/FocusBar";
 
 function ResponsiveLayout() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
@@ -16,8 +20,10 @@ function ResponsiveLayout() {
   const { 
     isMobileMenuOpen, setIsMobileMenuOpen, isDesktop, 
     isNewTaskModalOpen, closeNewTaskModal, openNewTaskModal,
-    newTaskPrefillDate, newTaskPrefillHour, refreshTasks
+    newTaskPrefillDate, newTaskPrefillHour, refreshTasks, taskRefreshKey
   } = useNav();
+  // Keep the phone's task reminders in sync with the saved tasks
+  useReminderSync(taskRefreshKey);
   const pathname = usePathname();
 
   // Show FAB on mobile, specifically on the root (calendar) page
@@ -30,6 +36,7 @@ function ResponsiveLayout() {
       <View style={styles.mainContent}>
         <Slot />
         {showFAB && <FloatingActionButton onPress={() => openNewTaskModal()} />}
+        <FocusBar bottomOffset={isDesktop ? 24 : 96} />
       </View>
 
       {!isDesktop && (
@@ -56,7 +63,11 @@ export default function TabLayout() {
 
   return (
     <NavProvider isDesktop={isDesktop}>
-      <ResponsiveLayout />
+      <StreaksProvider>
+        <FocusProvider>
+          <ResponsiveLayout />
+        </FocusProvider>
+      </StreaksProvider>
     </NavProvider>
   );
 }

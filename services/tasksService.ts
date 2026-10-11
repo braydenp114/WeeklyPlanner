@@ -10,10 +10,10 @@ import {
   Timestamp,
   serverTimestamp,
   writeBatch,
+  increment,
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { generateOccurrenceDates, getRecurrenceEndBound, MAX_OCCURRENCES_PER_TASK } from '../utils/expandRecurrences';
-import { scheduleReminder } from '../hooks/use-task-reminders';
 
 export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekday' | 'custom';
 export type BusyStatus = 'busy' | 'free';
@@ -79,12 +79,25 @@ export interface Task {
   substitutedActivity?: string | null;
   /** Optional diary-style note about how the task went. */
   actualNote?: string | null;
+  /** Set automatically when a recurring task is saved, so its occurrences count towards a streak. */
+  streakEligible?: boolean;
+  /** Importance flag like Todoist: 1 = highest. null/undefined = no priority. */
+  priority?: 1 | 2 | 3 | null;
+  /** Minutes actually spent on this task, logged with the focus timer. */
+  actualMinutes?: number;
 }
 
 export type CreateTaskData = Omit<Task, 'id' | 'ownerId' | 'createdAt'>;
 export type UpdateTaskData = Partial<Omit<Task, 'id' | 'ownerId' | 'createdAt'>>;
 
 const TASKS_COLLECTION = 'tasks';
+
+/**
+ * How many occurrences are written per batch when materialising a recurring task.
+ * Kept well under Firestore's batch limit, since serverTimestamp() fields can count
+ * as extra operations; a daily task (up to 366 documents) is saved in two batches.
+ */
+const OCCURRENCE_BATCH_SIZE = 200;
 
 /**
  * Creates a new task in Firestore.
@@ -98,11 +111,13 @@ export async function createTask(data: CreateTaskData): Promise<string> {
     ...data,
     ownerId: currentUser.uid,
     createdAt: serverTimestamp(),
+    // Recurring tasks become streak-eligible on save, with no extra setup from the user
+    streakEligible: data.recurrence !== 'none',
   };
 
   if (data.recurrence === 'none') {
+    // Reminders are scheduled by useReminderSync after the task list refreshes
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
-    await scheduleReminder(data);
     return docRef.id;
   }
 
@@ -128,7 +143,7 @@ export async function createTask(data: CreateTaskData): Promise<string> {
   const startMinutes = taskStart.getMinutes();
   const startSeconds = taskStart.getSeconds();
 
-  const batch = writeBatch(db);
+  let batch = writeBatch(db);
   let batchCount = 0;
   let totalEmitted = 0;
   const maxOccurrences = data.customRecurrenceRule?.endOccurrences ?? undefined;
@@ -155,11 +170,20 @@ export async function createTask(data: CreateTaskData): Promise<string> {
     batch.set(docRef, occData);
     batchCount++;
     totalEmitted++;
+
+    // Commit in chunks so long series (e.g. daily) never exceed the batch limit
+    if (batchCount === OCCURRENCE_BATCH_SIZE) {
+      await batch.commit();
+      batch = writeBatch(db);
+      batchCount = 0;
+    }
   }
 
   if (batchCount > 0) {
     await batch.commit();
-  } else {
+  }
+
+  if (totalEmitted === 0) {
     // Fallback if no occurrences generated for some reason
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
     return docRef.id;
@@ -306,6 +330,63 @@ export async function updateSeries(seriesId: string, data: UpdateTaskData, timeD
     }
     await batch.commit();
   }
+}
+
+/**
+ * Retrieves every occurrence in a recurring series, used for streak tracking.
+ * Uses the same (ownerId, seriesId) query as updateSeries and deleteSeries.
+ */
+export async function getSeriesOccurrences(seriesId: string): Promise<Task[]> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('seriesId', '==', seriesId)
+  );
+
+  const snapshot = await getDocs(q);
+  const occurrences: Task[] = [];
+  snapshot.forEach((docSnap) => {
+    occurrences.push({ id: docSnap.id, ...docSnap.data() } as Task);
+  });
+  return occurrences;
+}
+
+/**
+ * Called when the Repeat setting of an existing task is changed in the edit modal.
+ * A plain update only changes the field on one document, so no new occurrences would
+ * appear. Instead, the edited task (and, for a series, every occurrence from it onwards)
+ * is removed and the task is recreated with the new repeat rule.
+ * Earlier occurrences of a series are kept, so past completions and streak history stay.
+ */
+export async function replaceRecurrence(original: Task, data: CreateTaskData): Promise<string> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  if (original.seriesId) {
+    const fromMs = original.startDate.toDate().getTime();
+    const q = query(
+      collection(db, TASKS_COLLECTION),
+      where('ownerId', '==', currentUser.uid),
+      where('seriesId', '==', original.seriesId)
+    );
+    const snapshot = await getDocs(q);
+    const refsToDelete = snapshot.docs
+      .filter((d) => d.data().startDate.toDate().getTime() >= fromMs)
+      .map((d) => d.ref);
+
+    for (let i = 0; i < refsToDelete.length; i += OCCURRENCE_BATCH_SIZE) {
+      const batch = writeBatch(db);
+      refsToDelete.slice(i, i + OCCURRENCE_BATCH_SIZE).forEach((ref) => batch.delete(ref));
+      await batch.commit();
+    }
+  } else if (original.id) {
+    await deleteDoc(doc(db, TASKS_COLLECTION, original.id));
+  }
+
+  return createTask(data);
 }
 
 /**
@@ -473,12 +554,26 @@ export async function logTaskActual(id: string, params: LogActualParams): Promis
   });
 }
 
+/**
+ * Adds focus-timer minutes to a task. Uses Firestore's increment so two sessions
+ * (or two devices) never overwrite each other.
+ */
+export async function addFocusMinutes(id: string, minutes: number): Promise<void> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+  if (minutes <= 0) return;
+
+  await updateDoc(doc(db, TASKS_COLLECTION, id), { actualMinutes: increment(minutes) });
+}
+
 export interface CategoryReviewStats {
   category: string;
   plannedHours: number;
   completedAsPlannedHours: number;
   substitutedCount: number;
   unloggedCount: number;
+  /** Hours actually spent, from the focus timer. */
+  focusedHours: number;
 }
 
 /**
@@ -499,9 +594,11 @@ export function calculateWeeklyReview(tasks: Task[]): CategoryReviewStats[] {
         completedAsPlannedHours: 0,
         substitutedCount: 0,
         unloggedCount: 0,
+        focusedHours: 0,
       });
     }
     const stats = statsByCategory.get(category)!;
+    stats.focusedHours += (task.actualMinutes ?? 0) / 60;
 
     const durationHours =
       (task.endDate.toDate().getTime() - task.startDate.toDate().getTime()) / (1000 * 60 * 60);
