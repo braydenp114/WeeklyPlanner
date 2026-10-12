@@ -1,6 +1,11 @@
 import { describe, expect, test } from "@jest/globals";
 import { PRESET_LOCATIONS } from "../../constants/presetLocations";
-import { ARRIVAL_RADIUS_METRES, distanceInMetres, findPresetAt } from "../geo";
+import {
+  ARRIVAL_RADIUS_METRES,
+  detectArrival,
+  distanceInMetres,
+  findPresetAt,
+} from "../geo";
 
 const autCity = PRESET_LOCATIONS.find((p) => p.id === "aut-city")!;
 
@@ -55,5 +60,29 @@ describe("findPresetAt", () => {
     expect(
       findPresetAt(autCity.latitude + 0.0027, autCity.longitude, 500)?.id,
     ).toBe("aut-city");
+  });
+});
+
+describe('detectArrival', () => {
+  const autNorth = PRESET_LOCATIONS.find((p) => p.id === 'aut-north')!;
+
+  test('arriving from nowhere counts as an arrival', () => {
+    expect(detectArrival(null, autCity)?.id).toBe('aut-city');
+  });
+
+  test('staying at the same place is not a new arrival', () => {
+    expect(detectArrival(autCity, autCity)).toBeNull();
+  });
+
+  test('leaving a place is not an arrival', () => {
+    expect(detectArrival(autCity, null)).toBeNull();
+  });
+
+  test('going straight to a different place is an arrival', () => {
+    expect(detectArrival(autCity, autNorth)?.id).toBe('aut-north');
+  });
+
+  test('being nowhere before and now is not an arrival', () => {
+    expect(detectArrival(null, null)).toBeNull();
   });
 });

@@ -39,3 +39,11 @@ export function findPresetAt(
   }
   return closest;
 }
+
+export function detectArrival(
+  previous: PresetLocation | null,
+  current: PresetLocation | null,
+): PresetLocation | null {
+  if (current && current.id !== previous?.id) return current;
+  return null;
+}
