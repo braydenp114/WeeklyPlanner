@@ -6,39 +6,17 @@ import {
   StyleSheet,
   Platform,
   Image,
+  ScrollView,
 } from "react-native";
 import { usePathname, router } from "expo-router";
-import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { NavIcon, NavIconName } from "./NavIcon";
 import { Colors, Typography, RoundedGeometry } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import { useAuth } from "@/context/AuthContext";
 import { useNav } from "@/context/NavContext";
-import {
-  useThemePreference,
-  ThemePreference,
-} from "@/context/ThemePreferenceContext";
-
-const NEXT_PREFERENCE: Record<ThemePreference, ThemePreference> = {
-  system: "light",
-  light: "dark",
-  dark: "system",
-};
-
-const PREFERENCE_ICON: Record<
-  ThemePreference,
-  keyof typeof MaterialIcons.glyphMap
-> = {
-  system: "brightness-auto",
-  light: "light-mode",
-  dark: "dark-mode",
-};
-
-const PREFERENCE_LABEL: Record<ThemePreference, string> = {
-  system: "Match System",
-  light: "Light Mode",
-  dark: "Dark Mode",
-};
+import { TodaySection } from "./sidebar/TodaySection";
+import { TodoSection } from "./sidebar/TodoSection";
+import { StreakSection } from "./sidebar/StreakSection";
 
 const NAV_ITEMS = [
   { name: "Weekly Grid", icon: "gridview", route: "/" },
@@ -51,7 +29,6 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, signOutUser } = useAuth();
   const { openNewTaskModal } = useNav();
-  const { preference, setPreference } = useThemePreference();
 
   return (
     <View
@@ -126,9 +103,22 @@ export function Sidebar() {
         </View>
       </View>
 
+      {/* Today, to-do list and streak challenges (signed-in users only) */}
+      {user && (
+        <ScrollView
+          style={styles.panels}
+          contentContainerStyle={styles.panelsContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <TodaySection />
+          <TodoSection />
+          <StreakSection />
+        </ScrollView>
+      )}
+
       <View style={styles.bottomSection}>
         {/* Settings */}
-        <TouchableOpacity style={styles.settingsItem} activeOpacity={0.7}>
+        <TouchableOpacity style={styles.settingsItem} activeOpacity={0.7} onPress={() => router.push('/settings' as any)}>
           <NavIcon name="gear" size={20} color={theme.textSecondary} />
           <Text
             style={[
@@ -138,28 +128,6 @@ export function Sidebar() {
             ]}
           >
             Settings
-          </Text>
-        </TouchableOpacity>
-
-        {/* Appearance toggle: tap to cycle System -> Light -> Dark -> System */}
-        <TouchableOpacity
-          style={styles.settingsItem}
-          activeOpacity={0.7}
-          onPress={() => setPreference(NEXT_PREFERENCE[preference])}
-        >
-          <MaterialIcons
-            name={PREFERENCE_ICON[preference]}
-            size={20}
-            color={theme.textSecondary}
-          />
-          <Text
-            style={[
-              styles.settingsText,
-              Typography.bodyMd,
-              { color: theme.textSecondary },
-            ]}
-          >
-            {PREFERENCE_LABEL[preference]}
           </Text>
         </TouchableOpacity>
 
@@ -260,6 +228,15 @@ const styles = StyleSheet.create({
   },
   navText: {
     flex: 1,
+  },
+  panels: {
+    flex: 1,
+    marginVertical: 16,
+    marginHorizontal: -8,
+  },
+  panelsContent: {
+    gap: 16,
+    paddingBottom: 8,
   },
   bottomSection: {
     gap: 16,
