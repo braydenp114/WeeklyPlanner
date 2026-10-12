@@ -125,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         await GoogleSignin.hasPlayServices();
         const signInResult = await GoogleSignin.signIn();
-        const idToken = signInResult?.data?.idToken;
+        const idToken = signInResult?.data?.idToken ?? (signInResult as any)?.idToken;
         if (!idToken) {
           throw new Error('Google Sign-In failed: no ID token received.');
         }

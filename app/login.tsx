@@ -107,9 +107,17 @@ export default function LoginScreen() {
       router.replace('/(tabs)');
     } catch (err: any) {
       console.error('[LoginScreen] Google Auth error caught:', err);
-      const code = err?.code || '';
-      const msg = err?.message || '';
-      if (code !== 'auth/popup-closed-by-user' && !msg.includes('popup-closed-by-user')) {
+      const code = String(err?.code || '');
+      const msg = String(err?.message || '');
+      const isUserCancel =
+        code === 'auth/popup-closed-by-user' ||
+        code === 'SIGN_IN_CANCELLED' ||
+        code === '12501' ||
+        msg.includes('popup-closed-by-user') ||
+        msg.includes('SIGN_IN_CANCELLED') ||
+        msg.includes('user cancelled') ||
+        msg.includes('Sign in action cancelled');
+      if (!isUserCancel) {
         if (code === 'auth/argument-error' || msg.includes('argument-error')) {
           setErrorMessage('Google Sign-In failed due to invalid configuration.');
         } else {
