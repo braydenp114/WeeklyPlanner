@@ -9,7 +9,11 @@ import {
   StyleSheet,
   ScrollView,
   useWindowDimensions,
+  Platform,
+  Linking,
+  AppState,
 } from "react-native";
+import { Timestamp } from "firebase/firestore";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Colors, Fonts, RoundedGeometry, Typography } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/use-color-scheme";
@@ -32,6 +36,8 @@ import { Flag, Timer } from "lucide-react-native";
 import { useFocus } from "@/context/FocusContext";
 import { FOCUS_TARGET_MINUTES, formatMinutes } from "@/utils/focus";
 import { PRIORITY_META } from "@/utils/priority";
+import { isAutoCompleteAvailable } from "@/services/geofenceService";
+import { getCompletionWindow } from "@/utils/geofenceWindow";
 
 interface TaskPreviewPopoverProps {
   visible: boolean;
@@ -84,7 +90,42 @@ export function TaskPreviewPopover({
   const [actualNoteText, setActualNoteText] = useState("");
   const [savingActual, setSavingActual] = useState(false);
   const [streak, setStreak] = useState<StreakResult | null>(null);
+  const [autoCompleteOff, setAutoCompleteOff] = useState(false);
   const { session: focusSession, start: startFocus } = useFocus();
+
+  // Show the "auto-complete is off" hint on upcoming location-tagged tasks when permission
+  // is missing. This only reads the permission state and never prompts the user.
+  useEffect(() => {
+    const tData = task?.originalTaskData;
+    const eligible =
+      visible &&
+      Platform.OS !== "web" &&
+      !!tData &&
+      tData.latitude != null &&
+      tData.longitude != null &&
+      !tData.completed &&
+      getCompletionWindow(tData).end >= Date.now();
+    if (!eligible) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setAutoCompleteOff(false);
+      return;
+    }
+
+    let cancelled = false;
+    const check = () =>
+      isAutoCompleteAvailable().then((ok) => {
+        if (!cancelled) setAutoCompleteOff(!ok);
+      });
+    check();
+    // Re-check when the user comes back from the Settings app
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") check();
+    });
+    return () => {
+      cancelled = true;
+      sub.remove();
+    };
+  }, [visible, task]);
 
   // Fetches the series and recalculates the streak (null if the task is not streak-eligible)
   const fetchStreak = async (): Promise<StreakResult | null> => {
@@ -149,7 +190,12 @@ export function TaskPreviewPopover({
     const next = !completed;
     setCompleted(next);
     try {
-      await updateTask(task.originalTaskId, { completed: next, completedBy: next ? 'manual' : null });
+      // Manual completion works regardless of location permission
+      await updateTask(task.originalTaskId, {
+        completed: next,
+        completedBy: next ? 'manual' : null,
+        completedAt: next ? Timestamp.now() : null,
+      });
       await loadStreak();
       onChanged?.();
     } catch {
@@ -433,6 +479,30 @@ export function TaskPreviewPopover({
               </View>
             )}
 
+            {/* Auto-complete hint (location permission missing) */}
+            {autoCompleteOff && !completed && (
+              <View style={[styles.hintRow, { backgroundColor: theme.surfaceContainer }]}>
+                <MaterialIcons
+                  name="location-off"
+                  size={16}
+                  color={theme.onSurfaceVariant}
+                />
+                <Text style={[styles.hintText, { color: theme.textSecondary }]}>
+                  Auto-complete is off. Enable location in Settings.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => Linking.openSettings().catch(() => {})}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open location settings"
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={[styles.hintAction, { color: theme.primaryAction }]}>
+                    Settings
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Weather */}
             {weather && (
               <View style={styles.row}>
@@ -658,6 +728,25 @@ export function TaskPreviewPopover({
 }
 
 const styles = StyleSheet.create({
+  hintRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  hintText: {
+    flex: 1,
+    fontFamily: Fonts.body,
+    fontSize: 12,
+  },
+  hintAction: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    fontWeight: "600",
+  },
   overlay: {
     position: "absolute",
     top: 0,

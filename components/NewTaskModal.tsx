@@ -640,20 +640,27 @@ export default function NewTaskModal({
                   {
                     text: "Not Now",
                     style: "cancel",
-                    onPress: async () => {
-                      await AsyncStorage.setItem("hasPromptedGeofence", "true");
-                      resolve();
+                    onPress: () => {
+                      AsyncStorage.setItem("hasPromptedGeofence", "true")
+                        .catch(() => {})
+                        .finally(resolve);
                     },
                   },
                   {
                     text: "Continue to Permissions",
                     onPress: async () => {
-                      await AsyncStorage.setItem("hasPromptedGeofence", "true");
-                      const fg = await Location.requestForegroundPermissionsAsync();
-                      if (fg.granted) {
-                        await Location.requestBackgroundPermissionsAsync();
+                      try {
+                        await AsyncStorage.setItem("hasPromptedGeofence", "true");
+                        const fg = await Location.requestForegroundPermissionsAsync();
+                        if (fg.granted) {
+                          await Location.requestBackgroundPermissionsAsync();
+                        }
+                      } catch (err) {
+                        // Denied or unavailable: the task is already saved, auto-complete just stays off
+                        console.warn("Geofence permission request failed:", err);
+                      } finally {
+                        resolve();
                       }
-                      resolve();
                     },
                   },
                 ],

@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { generateOccurrenceDates, getRecurrenceEndBound, MAX_OCCURRENCES_PER_TASK } from '../utils/expandRecurrences';
+import { getCompletionWindow } from '../utils/geofenceWindow';
 
 export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly' | 'yearly' | 'weekday' | 'custom';
 export type BusyStatus = 'busy' | 'free';
@@ -641,12 +642,12 @@ export async function getUpcomingLocationTasks(): Promise<Task[]> {
   snapshot.forEach((docSnap) => {
     const task = { id: docSnap.id, ...docSnap.data() } as Task;
     
-    // Only location-tagged tasks that aren't completed
-    if (!task.location || !task.latitude || !task.longitude) return;
+    // Only tasks with coordinates (custom-searched or preset locations) that aren't completed
+    if (task.latitude == null || task.longitude == null) return;
     if (task.completed) return;
     
-    // Skip if it ended in the past
-    if (task.endDate.toDate() < now) return;
+    // Skip once its completion window (including any grace period) has closed
+    if (getCompletionWindow(task).end < now.getTime()) return;
 
     // We have a composite index on ownerId ASC, startDate ASC, so we can't easily 
     // filter `endDate >= now` on the server at the same time. The client-side filter is fine.
