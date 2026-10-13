@@ -54,3 +54,6 @@ CLAUDE.md
 .vscode/
 
 .agents
+implementation_plan.md
+functions/lib/
+

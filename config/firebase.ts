@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getFunctions } from 'firebase/functions';
 import {
   initializeAuth,
   getAuth,
@@ -57,5 +58,6 @@ try {
 export const auth = authInstance;
 export const googleProvider = new GoogleAuthProvider();
 export const db = getFirestore(app);
+export const functions = getFunctions(app, 'asia-southeast1');
 
 export default app;

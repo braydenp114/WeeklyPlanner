@@ -45,7 +45,11 @@ import {
   CustomRecurrenceRule,
   ChecklistItem,
   getUpcomingDeadlines,
+  getTasksForRange,
 } from "@/services/tasksService";
+import { useTravelSettings } from "@/context/TravelSettingsContext";
+import { getTravelTimeEstimate } from "@/services/travelTimeService";
+import { calculateFeasibility } from "@/utils/travelFeasibility";
 import { CalendarPicker } from "./ui/CalendarPicker";
 import { Priority, PRIORITY_META } from "@/utils/priority";
 import { TimeDropdown, AnchorRect } from "./ui/TimeDropdown";
@@ -241,6 +245,109 @@ export default function NewTaskModal({
   const [newChecklistItemText, setNewChecklistItemText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const { travelMode, comfortBufferMinutes } = useTravelSettings();
+  const [travelConflictNotice, setTravelConflictNotice] = useState<{
+    precedingTaskTitle: string;
+    durationMinutes: number;
+    scheduledGapMinutes: number;
+    mode: string;
+    isOverlap: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (
+      !visible ||
+      !locationCoordinates ||
+      allDay ||
+      typeof locationCoordinates.latitude !== "number" ||
+      typeof locationCoordinates.longitude !== "number"
+    ) {
+      Promise.resolve().then(() => {
+        if (!cancelled) setTravelConflictNotice(null);
+      });
+      return;
+    }
+
+    const dayStart = new Date(startDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(startDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    getTasksForRange(dayStart, dayEnd)
+      .then(async (dayTasks) => {
+        if (cancelled) return;
+        const currentEditingId = editTaskData?.id;
+        const locationTasks = dayTasks.filter(
+          (t) =>
+            t.id !== currentEditingId &&
+            !t.allDay &&
+            typeof t.latitude === "number" &&
+            typeof t.longitude === "number"
+        );
+        locationTasks.sort((a, b) => a.startDate.toMillis() - b.startDate.toMillis());
+
+        // Find the preceding task that starts before our startDate
+        const preceding = [...locationTasks]
+          .reverse()
+          .find((t) => t.startDate.toMillis() <= startDate.getTime());
+
+        if (!preceding) {
+          setTravelConflictNotice(null);
+          return;
+        }
+
+        const prevEndMs = preceding.endDate.toMillis();
+        const curStartMs = startDate.getTime();
+        const gapMin = Math.round((curStartMs - prevEndMs) / 60000);
+
+        try {
+          const est = await getTravelTimeEstimate({
+            origin: { latitude: preceding.latitude!, longitude: preceding.longitude! },
+            destination: { latitude: locationCoordinates.latitude, longitude: locationCoordinates.longitude },
+            travelMode,
+            departureTime: preceding.endDate.toDate().toISOString(),
+          });
+          if (cancelled) return;
+
+          const feas = calculateFeasibility(gapMin, est.durationMinutes, comfortBufferMinutes);
+          if (feas.status === "infeasible" || feas.status === "overlap") {
+            const modeName =
+              travelMode === "DRIVE"
+                ? "drive"
+                : travelMode === "TRANSIT"
+                ? "transit trip"
+                : "walk";
+
+            setTravelConflictNotice({
+              precedingTaskTitle: preceding.title,
+              durationMinutes: est.durationMinutes,
+              scheduledGapMinutes: gapMin,
+              mode: modeName,
+              isOverlap: feas.status === "overlap",
+            });
+          } else {
+            setTravelConflictNotice(null);
+          }
+        } catch (e) {
+          console.warn("[NewTaskModal] Failed checking travel feasibility:", e);
+        }
+      })
+      .catch((e) => console.warn("[NewTaskModal] Failed fetching day tasks:", e));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    visible,
+    startDate,
+    locationCoordinates,
+    allDay,
+    travelMode,
+    comfortBufferMinutes,
+    editTaskData?.id,
+  ]);
 
   const handleAddChecklistItem = useCallback(() => {
     const text = newChecklistItemText.trim();
@@ -990,6 +1097,32 @@ export default function NewTaskModal({
                   theme={theme}
                 />
               </View>
+
+              {/* Travel Feasibility Advisory Banner */}
+              {travelConflictNotice && (
+                <View
+                  style={[
+                    styles.travelConflictBanner,
+                    {
+                      backgroundColor: scheme === "dark" ? "#3b1212" : "#fee2e2",
+                      borderColor: "#ef4444",
+                    },
+                  ]}
+                >
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                    <MaterialIcons name="warning" size={16} color="#ef4444" />
+                    <MaterialIcons name="schedule" size={16} color="#ef4444" />
+                    <Text style={[styles.travelConflictHeader, { color: "#ef4444" }]}>
+                      Travel Feasibility Advisory
+                    </Text>
+                  </View>
+                  <Text style={[styles.travelConflictText, { color: "#ef4444" }]}>
+                    {travelConflictNotice.isOverlap
+                      ? `Overlaps with "${travelConflictNotice.precedingTaskTitle}" by ${Math.abs(travelConflictNotice.scheduledGapMinutes)} min.`
+                      : `Travel conflict: ${travelConflictNotice.durationMinutes} min ${travelConflictNotice.mode} needed from "${travelConflictNotice.precedingTaskTitle}", but only ${travelConflictNotice.scheduledGapMinutes} min gap scheduled.`}
+                  </Text>
+                </View>
+              )}
 
               {/* Notifications */}
               <View style={[styles.fieldSection, { zIndex: 15 }]}>
@@ -1976,6 +2109,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     borderBottomWidth: 1,
     paddingVertical: 6,
+  },
+  travelConflictBanner: {
+    marginHorizontal: 16,
+    marginVertical: 6,
+    padding: 10,
+    borderRadius: RoundedGeometry.default,
+    borderWidth: 1,
+    gap: 4,
+  },
+  travelConflictHeader: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  travelConflictText: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    lineHeight: 16,
+    marginLeft: 22,
   },
 });
 

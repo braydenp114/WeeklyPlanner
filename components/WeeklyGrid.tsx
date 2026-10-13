@@ -35,6 +35,8 @@ import {
   formatHourLabel,
   NOW_LINE_COLOR,
 } from './calendar-shared';
+import { useTravelSettings } from '@/context/TravelSettingsContext';
+import { TravelConnectorChip } from './TravelConnectorChip';
 
 // Re-exported so existing imports from '@/components/WeeklyGrid' keep working
 export type { TaskItem } from './calendar-shared';
@@ -224,6 +226,7 @@ export default function WeeklyGrid() {
   const { user, loading: authLoading } = useAuth();
   const { isDesktop, setIsMobileMenuOpen, openNewTaskModal, taskRefreshKey } = useNav();
   const { challenges } = useStreaks();
+  const { travelMode, comfortBufferMinutes } = useTravelSettings();
 
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -809,6 +812,38 @@ export default function WeeklyGrid() {
                           </HoverableTaskCard>
                         );
                       })}
+
+                    {/* Travel connectors between consecutive location-based tasks */}
+                    {(() => {
+                      const dayLocationTasks = visibleTasks
+                        .filter(
+                          (t) =>
+                            t.dayIndex === dayIdx &&
+                            !t.isAllDay &&
+                            typeof t.originalTaskData.latitude === 'number' &&
+                            typeof t.originalTaskData.longitude === 'number'
+                        )
+                        .sort((a, b) => a.startHour - b.startHour);
+
+                      const pairs: { fromTask: TaskItem; toTask: TaskItem }[] = [];
+                      for (let i = 0; i < dayLocationTasks.length - 1; i++) {
+                        pairs.push({
+                          fromTask: dayLocationTasks[i],
+                          toTask: dayLocationTasks[i + 1],
+                        });
+                      }
+
+                      return pairs.map((pair) => (
+                        <TravelConnectorChip
+                          key={`travel-${pair.fromTask.id}-${pair.toTask.id}`}
+                          fromTask={pair.fromTask}
+                          toTask={pair.toTask}
+                          travelMode={travelMode}
+                          bufferMinutes={comfortBufferMinutes}
+                          rowHeight={ROW_HEIGHT}
+                        />
+                      ));
+                    })()}
 
                     {/* Current time indicator */}
                     {isToday(date) && (

@@ -4,6 +4,7 @@ import 'react-native-reanimated';
 
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemePreferenceProvider } from '@/context/ThemePreferenceContext';
+import { TravelSettingsProvider } from '@/context/TravelSettingsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import React, { useEffect } from 'react';
@@ -17,7 +18,9 @@ export const unstable_settings = {
 export default function RootLayout() {
   return (
     <ThemePreferenceProvider>
-      <AppContent />
+      <TravelSettingsProvider>
+        <AppContent />
+      </TravelSettingsProvider>
     </ThemePreferenceProvider>
   );
 }

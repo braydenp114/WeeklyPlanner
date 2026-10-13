@@ -25,7 +25,12 @@ import {
   logTaskActual,
   getSeriesOccurrences,
   ChecklistItem,
+  getTasksForRange,
+  Task,
 } from "@/services/tasksService";
+import { useTravelSettings } from "@/context/TravelSettingsContext";
+import { getTravelTimeEstimate, TravelEstimate } from "@/services/travelTimeService";
+import { calculateFeasibility, FeasibilityResult } from "@/utils/travelFeasibility";
 import {
   calculateStreak,
   isStreakEligible,
@@ -92,6 +97,142 @@ export function TaskPreviewPopover({
   const [streak, setStreak] = useState<StreakResult | null>(null);
   const [autoCompleteOff, setAutoCompleteOff] = useState(false);
   const { session: focusSession, start: startFocus } = useFocus();
+  const { travelMode, comfortBufferMinutes } = useTravelSettings();
+
+  const [precedingEstimate, setPrecedingEstimate] = useState<{
+    task: Task;
+    estimate: TravelEstimate;
+    feasibility: FeasibilityResult;
+    scheduledGapMinutes: number;
+    recommendedDeparture: Date;
+  } | null>(null);
+
+  const [subsequentEstimate, setSubsequentEstimate] = useState<{
+    task: Task;
+    estimate: TravelEstimate;
+    feasibility: FeasibilityResult;
+    scheduledGapMinutes: number;
+    recommendedDeparture: Date;
+  } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tData = task?.originalTaskData;
+    if (
+      !visible ||
+      !tData ||
+      typeof tData.latitude !== "number" ||
+      typeof tData.longitude !== "number" ||
+      tData.allDay
+    ) {
+      Promise.resolve().then(() => {
+        if (!cancelled) {
+          setPrecedingEstimate(null);
+          setSubsequentEstimate(null);
+        }
+      });
+      return;
+    }
+
+
+    const taskDate = tData.startDate.toDate();
+    const dayStart = new Date(taskDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(taskDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    getTasksForRange(dayStart, dayEnd)
+      .then(async (dayTasks) => {
+        if (cancelled) return;
+        const locationTasks = dayTasks.filter(
+          (t) =>
+            !t.allDay &&
+            typeof t.latitude === "number" &&
+            typeof t.longitude === "number"
+        );
+        locationTasks.sort((a, b) => a.startDate.toMillis() - b.startDate.toMillis());
+
+        const currentIndex = locationTasks.findIndex((t) => t.id === tData.id);
+        if (currentIndex === -1) return;
+
+        // Preceding task
+        if (currentIndex > 0) {
+          const prev = locationTasks[currentIndex - 1];
+          const prevEnd = prev.endDate.toMillis();
+          const curStart = tData.startDate.toMillis();
+          const gapMin = Math.round((curStart - prevEnd) / 60000);
+
+          try {
+            const est = await getTravelTimeEstimate({
+              origin: { latitude: prev.latitude!, longitude: prev.longitude! },
+              destination: { latitude: tData.latitude!, longitude: tData.longitude! },
+              travelMode,
+              departureTime: prev.endDate.toDate().toISOString(),
+            });
+            if (cancelled) return;
+
+            const feas = calculateFeasibility(gapMin, est.durationMinutes, comfortBufferMinutes);
+            const departureDate = new Date(prevEnd + 3 * 60 * 1000);
+
+            setPrecedingEstimate({
+              task: prev,
+              estimate: est,
+              feasibility: feas,
+              scheduledGapMinutes: gapMin,
+              recommendedDeparture: departureDate,
+            });
+          } catch (e) {
+            console.warn("[TaskPreviewPopover] Failed getting preceding estimate:", e);
+          }
+        } else {
+          setPrecedingEstimate(null);
+        }
+
+        // Subsequent task
+        if (currentIndex < locationTasks.length - 1) {
+          const next = locationTasks[currentIndex + 1];
+          const curEnd = tData.endDate.toMillis();
+          const nextStart = next.startDate.toMillis();
+          const gapMin = Math.round((nextStart - curEnd) / 60000);
+
+          try {
+            const est = await getTravelTimeEstimate({
+              origin: { latitude: tData.latitude!, longitude: tData.longitude! },
+              destination: { latitude: next.latitude!, longitude: next.longitude! },
+              travelMode,
+              departureTime: tData.endDate.toDate().toISOString(),
+            });
+            if (cancelled) return;
+
+            const feas = calculateFeasibility(gapMin, est.durationMinutes, comfortBufferMinutes);
+            const departureDate = new Date(curEnd + 3 * 60 * 1000);
+
+            setSubsequentEstimate({
+              task: next,
+              estimate: est,
+              feasibility: feas,
+              scheduledGapMinutes: gapMin,
+              recommendedDeparture: departureDate,
+            });
+          } catch (e) {
+            console.warn("[TaskPreviewPopover] Failed getting subsequent estimate:", e);
+          }
+        } else {
+          setSubsequentEstimate(null);
+        }
+      })
+      .catch((e) => console.warn("[TaskPreviewPopover] Failed getting day tasks:", e));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    visible,
+    task?.originalTaskId,
+    task?.originalTaskData,
+    travelMode,
+    comfortBufferMinutes,
+  ]);
 
   // Show the "auto-complete is off" hint on upcoming location-tagged tasks when permission
   // is missing. This only reads the permission state and never prompts the user.
@@ -476,6 +617,119 @@ export function TaskPreviewPopover({
                 <Text style={[styles.detailText, { color: theme.text }]}>
                   {tData.location}
                 </Text>
+              </View>
+            )}
+
+            {/* Travel & Route Feasibility Section */}
+            {(precedingEstimate || subsequentEstimate) && (
+              <View
+                style={[
+                  styles.travelSection,
+                  {
+                    backgroundColor: theme.surfaceContainer,
+                    borderColor: theme.outlineVariant,
+                  },
+                ]}
+              >
+                {precedingEstimate && (
+                  <View style={styles.travelItem}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <MaterialIcons
+                        name={
+                          precedingEstimate.feasibility.status === "infeasible" ||
+                          precedingEstimate.feasibility.status === "overlap"
+                            ? "warning"
+                            : precedingEstimate.estimate.travelMode === "TRANSIT"
+                            ? "directions-transit"
+                            : precedingEstimate.estimate.travelMode === "WALK"
+                            ? "directions-walk"
+                            : "directions-car"
+                        }
+                        size={16}
+                        color={
+                          precedingEstimate.feasibility.status === "infeasible" ||
+                          precedingEstimate.feasibility.status === "overlap"
+                            ? "#ef4444"
+                            : precedingEstimate.feasibility.status === "tight"
+                            ? "#d97706"
+                            : theme.primaryAction
+                        }
+                      />
+                      <Text style={[styles.travelTitle, { color: theme.text }]} numberOfLines={1}>
+                        From {precedingEstimate.task.title}: {precedingEstimate.estimate.durationMinutes} min
+                        {precedingEstimate.estimate.distanceMeters > 0
+                          ? ` (${(precedingEstimate.estimate.distanceMeters / 1000).toFixed(1)} km)`
+                          : ""}
+                      </Text>
+                    </View>
+
+                    <Text style={[styles.travelDetail, { color: theme.textSecondary }]}>
+                      Recommended departure: {timeFmt.format(precedingEstimate.recommendedDeparture)}
+                    </Text>
+
+                    {precedingEstimate.estimate.trafficDelayMinutes > 5 && (
+                      <Text style={[styles.travelDetail, { color: "#ef4444" }]}>
+                        Includes {precedingEstimate.estimate.trafficDelayMinutes} min traffic delay (baseline: {precedingEstimate.estimate.staticDurationMinutes} min)
+                      </Text>
+                    )}
+
+                    {(precedingEstimate.feasibility.status === "infeasible" ||
+                      precedingEstimate.feasibility.status === "overlap") && (
+                      <View
+                        style={[
+                          styles.travelConflictBadge,
+                          {
+                            backgroundColor: scheme === "dark" ? "#3b1212" : "#fee2e2",
+                            borderColor: "#ef4444",
+                          },
+                        ]}
+                      >
+                        <MaterialIcons name="warning" size={14} color="#ef4444" />
+                        <Text style={[styles.travelConflictText, { color: "#ef4444" }]}>
+                          {precedingEstimate.feasibility.status === "overlap"
+                            ? "Overlapping schedule"
+                            : `Tight/Late: Needs ${precedingEstimate.estimate.durationMinutes} min, only ${precedingEstimate.scheduledGapMinutes} min gap`}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {subsequentEstimate && (
+                  <View
+                    style={[
+                      styles.travelItem,
+                      precedingEstimate && {
+                        borderTopWidth: 1,
+                        borderTopColor: theme.outlineVariant,
+                        paddingTop: 8,
+                      },
+                    ]}
+                  >
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <MaterialIcons
+                        name={
+                          subsequentEstimate.estimate.travelMode === "TRANSIT"
+                            ? "directions-transit"
+                            : subsequentEstimate.estimate.travelMode === "WALK"
+                            ? "directions-walk"
+                            : "directions-car"
+                        }
+                        size={16}
+                        color={theme.primaryAction}
+                      />
+                      <Text style={[styles.travelTitle, { color: theme.text }]} numberOfLines={1}>
+                        To {subsequentEstimate.task.title}: {subsequentEstimate.estimate.durationMinutes} min
+                        {subsequentEstimate.estimate.distanceMeters > 0
+                          ? ` (${(subsequentEstimate.estimate.distanceMeters / 1000).toFixed(1)} km)`
+                          : ""}
+                      </Text>
+                    </View>
+                    <Text style={[styles.travelDetail, { color: theme.textSecondary }]}>
+                      Leave at {timeFmt.format(subsequentEstimate.recommendedDeparture)} (with 3m pack-up)
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 
@@ -867,5 +1121,42 @@ const styles = StyleSheet.create({
     fontSize: Typography.labelSm.fontSize,
     fontWeight: "600",
     marginTop: 4,
+  },
+  travelSection: {
+    borderRadius: RoundedGeometry.default,
+    borderWidth: 1,
+    padding: 10,
+    gap: 8,
+    marginVertical: 4,
+  },
+  travelItem: {
+    gap: 3,
+  },
+  travelTitle: {
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    fontWeight: "600",
+    flex: 1,
+  },
+  travelDetail: {
+    fontFamily: Fonts.body,
+    fontSize: 12,
+    marginLeft: 22,
+  },
+  travelConflictBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    marginTop: 4,
+    marginLeft: 22,
+  },
+  travelConflictText: {
+    fontFamily: Fonts.body,
+    fontSize: 11,
+    fontWeight: "600",
   },
 });
