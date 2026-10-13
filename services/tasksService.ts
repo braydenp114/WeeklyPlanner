@@ -433,59 +433,6 @@ export async function getUpcomingDeadlines(): Promise<Task[]> {
   return deadlines;
 }
 
-export interface UnallocatedDeadline {
-  task: Task;
-  hoursUntilDeadline: number;
-}
-
-/**
- * Finds deadlines within their warning window that have no linked tasks
- * (i.e. no time has been allocated toward them).
- */
-export async function getUnallocatedDeadlines(): Promise<UnallocatedDeadline[]> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
-
-  const now = new Date();
-  const lookahead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-  const q = query(
-    collection(db, TASKS_COLLECTION),
-    where('ownerId', '==', currentUser.uid),
-    where('isDeadline', '==', true),
-    where('startDate', '>=', Timestamp.fromDate(now)),
-    where('startDate', '<=', Timestamp.fromDate(lookahead))
-  );
-
-  const snapshot = await getDocs(q);
-  const deadlines: Task[] = [];
-  snapshot.forEach((doc) => {
-    deadlines.push({ id: doc.id, ...doc.data() } as Task);
-  });
-
-  const results: UnallocatedDeadline[] = [];
-
-  for (const deadline of deadlines) {
-    const warningHours = deadline.deadlineWarningHours ?? 72;
-    const deadlineDate = deadline.startDate.toDate();
-    const hoursUntil = (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-    if (hoursUntil > warningHours) continue;
-
-    const linkedQuery = query(
-      collection(db, TASKS_COLLECTION),
-      where('ownerId', '==', currentUser.uid),
-      where('linkedDeadlineId', '==', deadline.id)
-    );
-    const linkedSnapshot = await getDocs(linkedQuery);
-
-    if (linkedSnapshot.empty) {
-      results.push({ task: deadline, hoursUntilDeadline: hoursUntil });
-    }
-  }
-
-  return results;
-}
 export interface LogActualParams {
   status: 'as_planned' | 'different';
   substitutedActivity?: string | null;
