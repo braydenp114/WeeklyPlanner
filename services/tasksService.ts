@@ -196,8 +196,8 @@ export async function createTask(data: CreateTaskData): Promise<string> {
 /**
  * Retrieves tasks for the authenticated user within a specific date range.
  * Note: A composite index on (ownerId ASC, startDate ASC) is required for this query.
- * Note on Recurring Tasks: This query only fetches based on `startDate`. If a task was created before the range
- * but recurs within it, it will NOT be returned by this basic query. Client-side expansion or denormalization is needed later.
+ * Note: Recurring tasks are materialized as individual documents on creation,
+ * so each occurrence has its own startDate and is returned directly by this query.
  */
 export async function getTasksForRange(start: Date, end: Date): Promise<Task[]> {
   const currentUser = auth.currentUser;

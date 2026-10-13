@@ -174,7 +174,8 @@ export const getTravelTime = onCall<TravelTimeRequestData, Promise<TravelTimeRes
       throw new HttpsError('invalid-argument', `Invalid travel mode: ${travelMode}. Supported: DRIVE, TRANSIT, WALK.`);
     }
 
-    // 3. Multi-instance Firestore-backed rate limiting (30 requests/minute per UID)
+    // 3. Fixed-window rate limiter (30 requests per 60s per user UID) to protect against per-user abuse.
+    // Long-term free tier budget protection is enforced at the project level via Cloud Console quotas.
     const db = admin.firestore();
     const rateLimitRef = db.doc(`users/${uid}/rateLimits/travelTime`);
     const nowMs = Date.now();
