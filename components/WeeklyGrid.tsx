@@ -409,9 +409,9 @@ export default function WeeklyGrid() {
     );
   }, [allDayTasks, completionFilter]);
 
-  // ── Layout Algorithm for Staggered Events ──
-  // Groups overlapping tasks into clusters and calculates staggered/cascading overlap,
-  // assigning each task an offset column index (col) and the total overlapping depth (maxCols).
+  // ── Layout Algorithm for Overlapping Events ──
+  // Groups overlapping tasks into concurrent clusters and assigns each task a column index (col)
+  // and the total concurrent column count (maxCols) to render side-by-side equal-width columns.
   const layoutMap = useMemo(() => {
     const map = new Map<string, { col: number; maxCols: number }>();
 
@@ -799,7 +799,7 @@ export default function WeeklyGrid() {
                               {
                                 top: task.startHour * ROW_HEIGHT + 1,
                                 height,
-                                // Overlapping tasks sit side by side instead of covering each other
+                                // Overlapping tasks sit side by side in equal-width columns instead of covering each other
                                 left: `${(col / maxCols) * 100}%`,
                                 width: `${100 / maxCols}%`,
                                 borderColor: surface,

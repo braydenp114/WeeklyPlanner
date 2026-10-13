@@ -64,7 +64,7 @@ async function callRoutesApi(
   origin: LatLng,
   destination: LatLng,
   travelMode: TravelMode,
-  departureIso: string,
+  departureIso: string | undefined,
   apiKey: string,
   departureMs: number
 ): Promise<{ durationMinutes: number; staticDurationMinutes: number; distanceMeters: number; trafficDelayMinutes: number } | null> {
@@ -86,8 +86,11 @@ async function callRoutesApi(
       },
     },
     travelMode,
-    departureTime: departureIso,
   };
+
+  if (departureIso) {
+    body.departureTime = departureIso;
+  }
 
   // Google Routes API strictly requires routingPreference ONLY for DRIVE mode.
   // Passing routingPreference for TRANSIT or WALK results in an HTTP 400 Bad Request.
@@ -229,7 +232,10 @@ export const getTravelTime = onCall<TravelTimeRequestData, Promise<TravelTimeRes
       };
     }
 
-    // 5. Use client-provided departure time, clamped to present moment if in the past
+    // 5. Calculate departure time:
+    // If target departure is missing, in the past, or within 30 seconds of now,
+    // omit departureTime so Google Routes API defaults to immediate departure.
+    let departureIso: string | undefined = undefined;
     let departureMs = nowMs;
     if (departureTime) {
       const parsed = new Date(departureTime).getTime();
@@ -237,11 +243,10 @@ export const getTravelTime = onCall<TravelTimeRequestData, Promise<TravelTimeRes
         departureMs = parsed;
       }
     }
-    // Clamp to present moment if target departure has already passed
-    if (departureMs < nowMs) {
-      departureMs = nowMs;
+    // Only pass departureTime to Routes API if target departure is more than 30 seconds in the future
+    if (departureMs > nowMs + 30 * 1000) {
+      departureIso = new Date(departureMs).toISOString();
     }
-    const departureIso = new Date(departureMs).toISOString();
 
     const apiKey = routesApiKey.value();
     if (!apiKey) {

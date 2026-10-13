@@ -74,8 +74,20 @@ export function calculateFeasibility(
     };
   }
 
+  // Zero-travel / same-location pairs require no transit; any non-negative gap is feasible, ignoring buffer
+  if (travel === 0) {
+    return {
+      status: 'feasible',
+      scheduledGapMinutes: gap,
+      travelMinutes: 0,
+      bufferMinutes: buffer,
+      shortfallMinutes: 0,
+      slackMinutes: gap,
+    };
+  }
+
   // Apply departure offset only when travel minutes are above 0 (no offset for same-location or zero-travel pairs)
-  const effectiveGap = travel > 0 ? gap - offset : gap;
+  const effectiveGap = gap - offset;
 
   if (effectiveGap < travel) {
     return {

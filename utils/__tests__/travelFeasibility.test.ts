@@ -39,17 +39,21 @@ describe('travelFeasibility utils', () => {
       expect(gap2.slackMinutes).toBe(0);
     });
 
-    it('classifies a 0 minute gap at the same location (zero travel) as not infeasible', () => {
-      // 0 min gap, 0 travel, 10 min comfort buffer -> tight with 0 slack
-      const sameLocation = calculateFeasibility(0, 0, 10);
-      expect(sameLocation.status).not.toBe('infeasible');
-      expect(sameLocation.status).toBe('tight');
-      expect(sameLocation.shortfallMinutes).toBe(0);
-      expect(sameLocation.slackMinutes).toBe(0);
+    it('classifies any gap of 0 or more for zero-travel pairs as feasible, ignoring buffer', () => {
+      // 0 min gap, 0 travel, 10 min comfort buffer -> feasible (ignores buffer) with 0 slack
+      const sameLocationZeroGap = calculateFeasibility(0, 0, 10);
+      expect(sameLocationZeroGap.status).toBe('feasible');
+      expect(sameLocationZeroGap.shortfallMinutes).toBe(0);
+      expect(sameLocationZeroGap.slackMinutes).toBe(0);
+
+      // 5 min gap, 0 travel, 10 min buffer -> feasible with 5 min slack (not tight)
+      const sameLocationPositiveGap = calculateFeasibility(5, 0, 10);
+      expect(sameLocationPositiveGap.status).toBe('feasible');
+      expect(sameLocationPositiveGap.shortfallMinutes).toBe(0);
+      expect(sameLocationPositiveGap.slackMinutes).toBe(5);
 
       // 0 min gap, 0 travel, 0 buffer -> feasible with 0 slack
       const zeroBuffer = calculateFeasibility(0, 0, 0);
-      expect(zeroBuffer.status).not.toBe('infeasible');
       expect(zeroBuffer.status).toBe('feasible');
       expect(zeroBuffer.shortfallMinutes).toBe(0);
       expect(zeroBuffer.slackMinutes).toBe(0);
