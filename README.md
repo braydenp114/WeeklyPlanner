@@ -137,8 +137,7 @@ WeeklyPlanner/
 ├── hooks/                       # Custom React hooks
 │   ├── use-color-scheme.ts      # Native color scheme detection
 │   ├── use-color-scheme.web.ts  # Web color scheme detection
-│   ├── use-task-reminders.ts    # Background task reminder notification sync
-│   └── use-theme-color.ts       # Theme-aware color lookup
+│   └── use-task-reminders.ts    # Background task reminder notification sync
 ├── scripts/
 │   └── generate-google-services.js # Script generating google-services.json from env vars
 ├── services/                    # Firestore and external API services
