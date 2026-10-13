@@ -40,7 +40,6 @@ import { TravelConnectorChip } from './TravelConnectorChip';
 
 // Re-exported so existing imports from '@/components/WeeklyGrid' keep working
 export type { TaskItem } from './calendar-shared';
-export { HoverableTaskCard, getPastEventStyle } from './calendar-shared';
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
 
