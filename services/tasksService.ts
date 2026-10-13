@@ -527,12 +527,15 @@ export async function getUpcomingLocationTasks(): Promise<Task[]> {
   if (!currentUser) throw new Error('User not authenticated');
 
   const now = new Date();
+  const lowerBound = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const lookahead = new Date(now.getTime() + 48 * 60 * 60 * 1000);
 
-  // We query for tasks starting before our lookahead window ends
+  // Query tasks starting between lowerBound (-24h) and lookahead (+48h).
+  // Uses existing composite index on (ownerId ASC, startDate ASC).
   const q = query(
     collection(db, TASKS_COLLECTION),
     where('ownerId', '==', currentUser.uid),
+    where('startDate', '>=', Timestamp.fromDate(lowerBound)),
     where('startDate', '<=', Timestamp.fromDate(lookahead))
   );
 
