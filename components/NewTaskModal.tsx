@@ -191,6 +191,10 @@ export interface NewTaskModalProps {
   prefillHour?: number;
 }
 
+/**
+ * Modal for creating and editing tasks with date/time pickers, recurrence rules,
+ * checklist sub-items, location autocomplete, and live travel conflict checks.
+ */
 export default function NewTaskModal({
   visible,
   onClose,

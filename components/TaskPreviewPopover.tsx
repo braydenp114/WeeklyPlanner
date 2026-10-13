@@ -73,6 +73,9 @@ function formatTaskTime(task: TaskItem) {
   return `${dateFmt.format(start)} · ${timeFmt.format(start)} – ${timeFmt.format(end)}`;
 }
 
+/**
+ * Contextual popover showing full task details, weather, travel estimates, checklists, and focus controls.
+ */
 export function TaskPreviewPopover({
   visible,
   onClose,

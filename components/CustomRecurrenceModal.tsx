@@ -39,6 +39,9 @@ const UNITS = [
 
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']; // 0-6 index, matching JS Date.getDay()
 
+/**
+ * Configures fine-grained recurring rules: interval, frequency unit, active weekdays, and end criteria.
+ */
 export function CustomRecurrenceModal({ visible, onClose, startDate, onSave, initialRule }: CustomRecurrenceModalProps) {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];

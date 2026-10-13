@@ -410,6 +410,8 @@ export default function WeeklyGrid() {
   }, [allDayTasks, completionFilter]);
 
   // ── Layout Algorithm for Staggered Events ──
+  // Groups overlapping tasks into clusters and calculates staggered/cascading overlap,
+  // assigning each task an offset column index (col) and the total overlapping depth (maxCols).
   const layoutMap = useMemo(() => {
     const map = new Map<string, { col: number; maxCols: number }>();
 

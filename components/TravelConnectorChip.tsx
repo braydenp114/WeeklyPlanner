@@ -22,6 +22,9 @@ interface TravelConnectorChipProps {
   rowHeight: number;
 }
 
+/**
+ * Renders an inline travel time chip and feasibility indicator between consecutive location-tagged tasks on the grid.
+ */
 export function TravelConnectorChip({
   fromTask,
   toTask,
