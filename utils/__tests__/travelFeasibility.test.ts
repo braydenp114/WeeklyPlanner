@@ -12,17 +12,53 @@ const fakeTimestamp = (ms: number) => ({ toMillis: () => ms }) as unknown as Tim
 
 describe('travelFeasibility utils', () => {
   describe('calculateFeasibility', () => {
-    it('returns overlap when scheduled gap is negative', () => {
+    it('returns overlap when scheduled gap is negative (classified strictly by raw negative gap)', () => {
       const result = calculateFeasibility(-15, 20, 10);
       expect(result.status).toBe('overlap');
-      expect(result.shortfallMinutes).toBe(35); // 15 + 20
+      expect(result.shortfallMinutes).toBe(35); // Math.abs(-15) + 20 (no offset on raw overlap)
       expect(result.slackMinutes).toBe(0);
     });
 
-    it('returns infeasible when scheduled gap is less than travel time', () => {
+    it('classifies a 0 to 2 minute gap at different locations as infeasible (not overlap)', () => {
+      // 0 minute gap with 15 min travel
+      const gap0 = calculateFeasibility(0, 15, 10);
+      expect(gap0.status).toBe('infeasible');
+      expect(gap0.shortfallMinutes).toBe(18); // 15 - (0 - 3)
+      expect(gap0.slackMinutes).toBe(0);
+
+      // 1 minute gap with 15 min travel
+      const gap1 = calculateFeasibility(1, 15, 10);
+      expect(gap1.status).toBe('infeasible');
+      expect(gap1.shortfallMinutes).toBe(17); // 15 - (1 - 3)
+      expect(gap1.slackMinutes).toBe(0);
+
+      // 2 minute gap with 15 min travel
+      const gap2 = calculateFeasibility(2, 15, 10);
+      expect(gap2.status).toBe('infeasible');
+      expect(gap2.shortfallMinutes).toBe(16); // 15 - (2 - 3)
+      expect(gap2.slackMinutes).toBe(0);
+    });
+
+    it('classifies a 0 minute gap at the same location (zero travel) as not infeasible', () => {
+      // 0 min gap, 0 travel, 10 min comfort buffer -> tight with 0 slack
+      const sameLocation = calculateFeasibility(0, 0, 10);
+      expect(sameLocation.status).not.toBe('infeasible');
+      expect(sameLocation.status).toBe('tight');
+      expect(sameLocation.shortfallMinutes).toBe(0);
+      expect(sameLocation.slackMinutes).toBe(0);
+
+      // 0 min gap, 0 travel, 0 buffer -> feasible with 0 slack
+      const zeroBuffer = calculateFeasibility(0, 0, 0);
+      expect(zeroBuffer.status).not.toBe('infeasible');
+      expect(zeroBuffer.status).toBe('feasible');
+      expect(zeroBuffer.shortfallMinutes).toBe(0);
+      expect(zeroBuffer.slackMinutes).toBe(0);
+    });
+
+    it('returns infeasible when scheduled gap is less than travel time + departure offset', () => {
       const result = calculateFeasibility(15, 25, 10);
       expect(result.status).toBe('infeasible');
-      expect(result.shortfallMinutes).toBe(10); // 25 - 15
+      expect(result.shortfallMinutes).toBe(13); // 25 - (15 - 3)
       expect(result.slackMinutes).toBe(0);
     });
 
@@ -30,24 +66,37 @@ describe('travelFeasibility utils', () => {
       const result = calculateFeasibility(30, 25, 10);
       expect(result.status).toBe('tight');
       expect(result.shortfallMinutes).toBe(0);
-      expect(result.slackMinutes).toBe(5); // 30 - 25
+      expect(result.slackMinutes).toBe(2); // (30 - 3) - 25
     });
 
     it('returns feasible when scheduled gap covers travel time plus comfort buffer', () => {
       const result = calculateFeasibility(40, 20, 10);
       expect(result.status).toBe('feasible');
       expect(result.shortfallMinutes).toBe(0);
-      expect(result.slackMinutes).toBe(10); // 40 - (20 + 10)
+      expect(result.slackMinutes).toBe(7); // (40 - 3) - (20 + 10)
     });
 
     it('handles exact boundaries properly', () => {
-      // Exactly equals travel time -> tight
-      const tightBoundary = calculateFeasibility(20, 20, 10);
-      expect(tightBoundary.status).toBe('tight');
+      // travel = 20, buffer = 10, offset = 3
+      // 1 minute below tight boundary (22 min gap) -> infeasible
+      const belowTight = calculateFeasibility(22, 20, 10);
+      expect(belowTight.status).toBe('infeasible');
+      expect(belowTight.shortfallMinutes).toBe(1);
 
-      // Exactly equals travel + buffer -> feasible
-      const feasibleBoundary = calculateFeasibility(30, 20, 10);
+      // Exactly equals travel time + departure offset (20 + 3 = 23) -> tight with 0 slack
+      const tightBoundary = calculateFeasibility(23, 20, 10);
+      expect(tightBoundary.status).toBe('tight');
+      expect(tightBoundary.slackMinutes).toBe(0);
+
+      // 1 minute below feasible boundary (32 min gap) -> tight with 9 min slack
+      const belowFeasible = calculateFeasibility(32, 20, 10);
+      expect(belowFeasible.status).toBe('tight');
+      expect(belowFeasible.slackMinutes).toBe(9);
+
+      // Exactly equals travel + buffer + departure offset (20 + 10 + 3 = 33) -> feasible with 0 slack
+      const feasibleBoundary = calculateFeasibility(33, 20, 10);
       expect(feasibleBoundary.status).toBe('feasible');
+      expect(feasibleBoundary.slackMinutes).toBe(0);
     });
   });
 

@@ -49,7 +49,7 @@ import {
 } from "@/services/tasksService";
 import { useTravelSettings } from "@/context/TravelSettingsContext";
 import { getTravelTimeEstimate } from "@/services/travelTimeService";
-import { calculateFeasibility } from "@/utils/travelFeasibility";
+import { calculateFeasibility, DEPARTURE_OFFSET_MS } from "@/utils/travelFeasibility";
 import { CalendarPicker } from "./ui/CalendarPicker";
 import { Priority, PRIORITY_META } from "@/utils/priority";
 import { TimeDropdown, AnchorRect } from "./ui/TimeDropdown";
@@ -307,11 +307,12 @@ export default function NewTaskModal({
         const gapMin = Math.round((curStartMs - prevEndMs) / 60000);
 
         try {
+          const departureIso = new Date(prevEndMs + DEPARTURE_OFFSET_MS).toISOString();
           const est = await getTravelTimeEstimate({
             origin: { latitude: preceding.latitude!, longitude: preceding.longitude! },
             destination: { latitude: locationCoordinates.latitude, longitude: locationCoordinates.longitude },
             travelMode,
-            departureTime: preceding.endDate.toDate().toISOString(),
+            departureTime: departureIso,
           });
           if (cancelled) return;
 

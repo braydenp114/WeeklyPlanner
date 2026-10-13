@@ -30,7 +30,7 @@ import {
 } from "@/services/tasksService";
 import { useTravelSettings } from "@/context/TravelSettingsContext";
 import { getTravelTimeEstimate, TravelEstimate } from "@/services/travelTimeService";
-import { calculateFeasibility, FeasibilityResult } from "@/utils/travelFeasibility";
+import { calculateFeasibility, FeasibilityResult, DEPARTURE_OFFSET_MS } from "@/utils/travelFeasibility";
 import {
   calculateStreak,
   isStreakEligible,
@@ -166,16 +166,16 @@ export function TaskPreviewPopover({
           const gapMin = Math.round((curStart - prevEnd) / 60000);
 
           try {
+            const departureDate = new Date(prevEnd + DEPARTURE_OFFSET_MS);
             const est = await getTravelTimeEstimate({
               origin: { latitude: prev.latitude!, longitude: prev.longitude! },
               destination: { latitude: tData.latitude!, longitude: tData.longitude! },
               travelMode,
-              departureTime: prev.endDate.toDate().toISOString(),
+              departureTime: departureDate.toISOString(),
             });
             if (cancelled) return;
 
             const feas = calculateFeasibility(gapMin, est.durationMinutes, comfortBufferMinutes);
-            const departureDate = new Date(prevEnd + 3 * 60 * 1000);
 
             setPrecedingEstimate({
               task: prev,
@@ -199,16 +199,16 @@ export function TaskPreviewPopover({
           const gapMin = Math.round((nextStart - curEnd) / 60000);
 
           try {
+            const departureDate = new Date(curEnd + DEPARTURE_OFFSET_MS);
             const est = await getTravelTimeEstimate({
               origin: { latitude: tData.latitude!, longitude: tData.longitude! },
               destination: { latitude: next.latitude!, longitude: next.longitude! },
               travelMode,
-              departureTime: tData.endDate.toDate().toISOString(),
+              departureTime: departureDate.toISOString(),
             });
             if (cancelled) return;
 
             const feas = calculateFeasibility(gapMin, est.durationMinutes, comfortBufferMinutes);
-            const departureDate = new Date(curEnd + 3 * 60 * 1000);
 
             setSubsequentEstimate({
               task: next,

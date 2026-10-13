@@ -229,13 +229,12 @@ export const getTravelTime = onCall<TravelTimeRequestData, Promise<TravelTimeRes
       };
     }
 
-    // 5. Calculate departure time with +3 minute buffer clamped to now
+    // 5. Use client-provided departure time, clamped to present moment if in the past
     let departureMs = nowMs;
     if (departureTime) {
       const parsed = new Date(departureTime).getTime();
       if (!isNaN(parsed)) {
-        // Add 3-minute departure buffer
-        departureMs = parsed + 3 * 60 * 1000;
+        departureMs = parsed;
       }
     }
     // Clamp to present moment if target departure has already passed

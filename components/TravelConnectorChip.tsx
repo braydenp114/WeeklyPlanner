@@ -12,6 +12,7 @@ import {
 import {
   calculateFeasibility,
   FeasibilityResult,
+  DEPARTURE_OFFSET_MS,
 } from '@/utils/travelFeasibility';
 
 interface TravelConnectorChipProps {
@@ -57,11 +58,13 @@ export function TravelConnectorChip({
       return;
     }
 
+    const departureIso = new Date(fromData.endDate.toDate().getTime() + DEPARTURE_OFFSET_MS).toISOString();
+
     getTravelTimeEstimate({
       origin: { latitude: fromData.latitude, longitude: fromData.longitude },
       destination: { latitude: toData.latitude, longitude: toData.longitude },
       travelMode,
-      departureTime: fromData.endDate.toDate().toISOString(),
+      departureTime: departureIso,
     })
       .then((res) => {
         if (!cancelled) {
@@ -141,8 +144,8 @@ export function TravelConnectorChip({
     textColor = theme.textSecondary;
   }
 
-  // Recommended departure time (leave previous task + 3 min pack-up buffer)
-  const departureDate = new Date(fromEndMs + 3 * 60 * 1000);
+  // Recommended departure time (leave previous task + pack-up buffer)
+  const departureDate = new Date(fromEndMs + DEPARTURE_OFFSET_MS);
   const timeFmt = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
   return (

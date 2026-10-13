@@ -18,6 +18,10 @@ export interface TaskTravelPair {
   departureTimeIso: string;
 }
 
+/** Allotted buffer in minutes after a previous task ends for pack-up / transition before departure. */
+export const DEPARTURE_OFFSET_MINUTES = 3;
+export const DEPARTURE_OFFSET_MS = DEPARTURE_OFFSET_MINUTES * 60 * 1000;
+
 /**
  * Calculates straight-line distance in meters using Haversine formula
  */
@@ -45,16 +49,20 @@ export function calculateHaversineDistanceMeters(
  * @param scheduledGapMinutes Gap in minutes between the previous task's end and the next task's start
  * @param travelMinutes Estimated travel time in minutes
  * @param bufferMinutes Safety/comfort buffer in minutes (defaults to 10)
+ * @param departureOffsetMinutes Allotted departure buffer in minutes (defaults to DEPARTURE_OFFSET_MINUTES = 3)
  */
 export function calculateFeasibility(
   scheduledGapMinutes: number,
   travelMinutes: number,
-  bufferMinutes: number = 10
+  bufferMinutes: number = 10,
+  departureOffsetMinutes: number = DEPARTURE_OFFSET_MINUTES
 ): FeasibilityResult {
   const gap = Math.round(scheduledGapMinutes);
   const travel = Math.max(0, Math.round(travelMinutes));
   const buffer = Math.max(0, Math.round(bufferMinutes));
+  const offset = Math.max(0, Math.round(departureOffsetMinutes));
 
+  // Overlap is classified strictly by raw negative scheduled gap (no offset)
   if (gap < 0) {
     return {
       status: 'overlap',
@@ -66,25 +74,28 @@ export function calculateFeasibility(
     };
   }
 
-  if (gap < travel) {
+  // Apply departure offset only when travel minutes are above 0 (no offset for same-location or zero-travel pairs)
+  const effectiveGap = travel > 0 ? gap - offset : gap;
+
+  if (effectiveGap < travel) {
     return {
       status: 'infeasible',
       scheduledGapMinutes: gap,
       travelMinutes: travel,
       bufferMinutes: buffer,
-      shortfallMinutes: travel - gap,
+      shortfallMinutes: travel - effectiveGap,
       slackMinutes: 0,
     };
   }
 
-  if (gap < travel + buffer) {
+  if (effectiveGap < travel + buffer) {
     return {
       status: 'tight',
       scheduledGapMinutes: gap,
       travelMinutes: travel,
       bufferMinutes: buffer,
       shortfallMinutes: 0,
-      slackMinutes: gap - travel,
+      slackMinutes: effectiveGap - travel,
     };
   }
 
@@ -94,7 +105,7 @@ export function calculateFeasibility(
     travelMinutes: travel,
     bufferMinutes: buffer,
     shortfallMinutes: 0,
-    slackMinutes: gap - (travel + buffer),
+    slackMinutes: effectiveGap - (travel + buffer),
   };
 }
 
@@ -166,8 +177,8 @@ export function getConsecutiveTaskPairs(tasks: Task[]): TaskTravelPair[] {
 
     const scheduledGapMinutes = Math.round((toStartMs - fromEndMs) / (60 * 1000));
 
-    // Departure time offset: 3 minutes pack-up buffer after fromTask ends
-    let departureMs = fromEndMs + 3 * 60 * 1000;
+    // Departure time offset: pack-up buffer after fromTask ends
+    let departureMs = fromEndMs + DEPARTURE_OFFSET_MS;
     // Clamp to now if passed
     if (departureMs < nowMs) {
       departureMs = nowMs;
