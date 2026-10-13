@@ -7,12 +7,14 @@ export interface WeeklyGoal {
   weekStart: Date;
 }
 
+/** Sums scheduled duration in hours for all tasks matching the goal category. */
 export function loggedHours(goal: WeeklyGoal, tasks: TaskItem[]): number {
   return tasks
     .filter((t) => t.category === goal.category)
     .reduce((sum, t) => sum + t.durationHours, 0);
 }
 
+/** Calculates hours remaining to hit the goal target (clamped to 0). */
 export function remainingHours(goal: WeeklyGoal, tasks: TaskItem[]): number {
   return Math.max(goal.targetHours - loggedHours(goal, tasks), 0);
 }
