@@ -15,6 +15,7 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+/** Root app layout configuring providers, background geofencing, and main stack navigation. */
 export default function RootLayout() {
   return (
     <ThemePreferenceProvider>

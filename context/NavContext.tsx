@@ -32,6 +32,7 @@ const NavContext = createContext<NavContextType>({
   openEditTaskModal: () => {},
 });
 
+/** Manages modal visibility, responsive layout state, and cross-component task refresh signals. */
 export function NavProvider({ children, isDesktop }: { children: ReactNode; isDesktop: boolean }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false);
@@ -83,6 +84,7 @@ export function NavProvider({ children, isDesktop }: { children: ReactNode; isDe
   );
 }
 
+/** Hook to access navigation context state and actions. */
 export function useNav() {
   return useContext(NavContext);
 }

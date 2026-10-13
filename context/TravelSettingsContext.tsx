@@ -19,6 +19,7 @@ const TravelSettingsContext = createContext<TravelSettingsContextType>({
   setComfortBufferMinutes: () => {},
 });
 
+/** Persists and provides global travel preferences (default mode and comfort buffer minutes). */
 export function TravelSettingsProvider({ children }: { children: ReactNode }) {
   const [travelMode, setTravelModeState] = useState<TravelMode>('DRIVE');
   const [comfortBufferMinutes, setComfortBufferState] = useState<number>(10);
@@ -66,6 +67,7 @@ export function TravelSettingsProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** Hook to access global travel mode and comfort buffer settings. */
 export function useTravelSettings() {
   return useContext(TravelSettingsContext);
 }

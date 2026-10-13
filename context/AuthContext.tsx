@@ -41,6 +41,7 @@ const AuthContext = createContext<AuthContextType>({
   signOutUser: async () => {},
 });
 
+/** Provides Firebase authentication state and email/Google sign-in methods. */
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -170,4 +171,5 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
+/** Hook to access current authenticated user and authentication actions. */
 export const useAuth = () => useContext(AuthContext);

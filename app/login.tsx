@@ -21,6 +21,7 @@ import {
 } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+/** Authentication screen handling email/password and Google Sign-In with validation. */
 export default function LoginScreen() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];

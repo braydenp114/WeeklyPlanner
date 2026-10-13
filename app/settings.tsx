@@ -28,6 +28,7 @@ const BUFFER_OPTIONS: { value: number; label: string }[] = [
   { value: 20, label: '20 minutes' },
 ];
 
+/** Settings screen configuring theme appearance, travel modes, and schedule buffer preferences. */
 export default function SettingsScreen() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
