@@ -14,6 +14,9 @@ interface RecurringActionDialogProps {
   onClose: () => void;
 }
 
+/**
+ * Prompts whether an edit or delete action should apply to 'this' event only or 'all' events in the series.
+ */
 export function RecurringActionDialog({
   visible,
   mode,

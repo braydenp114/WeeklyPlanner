@@ -31,17 +31,6 @@ export type TaskItem = {
   originalTaskData: Task;
 };
 
-export function getPastColor(hex: string) {
-  if (!hex || hex.length < 7) return hex;
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  // Blend 50% with dark gray (80,80,80)
-  const nr = Math.floor(r * 0.5 + 80 * 0.5);
-  const ng = Math.floor(g * 0.5 + 80 * 0.5);
-  const nb = Math.floor(b * 0.5 + 80 * 0.5);
-  return `#${nr.toString(16).padStart(2, '0')}${ng.toString(16).padStart(2, '0')}${nb.toString(16).padStart(2, '0')}`;
-}
 
 /**
  * Past events keep their colour but fade out (like Google Calendar),

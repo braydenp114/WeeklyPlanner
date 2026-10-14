@@ -31,6 +31,7 @@ function requireUser() {
   return currentUser;
 }
 
+/** Fetches all to-do items for the authenticated user. */
 export async function getTodos(): Promise<Todo[]> {
   const user = requireUser();
   const q = query(collection(db, TODOS_COLLECTION), where('ownerId', '==', user.uid));
@@ -43,6 +44,7 @@ export async function getTodos(): Promise<Todo[]> {
   return todos;
 }
 
+/** Creates a new pending to-do item for the authenticated user. */
 export async function addTodo(title: string, dueDate: string | null): Promise<string> {
   const user = requireUser();
   const ref = await addDoc(collection(db, TODOS_COLLECTION), {
@@ -55,11 +57,13 @@ export async function addTodo(title: string, dueDate: string | null): Promise<st
   return ref.id;
 }
 
+/** Updates the completed state of a to-do item. */
 export async function setTodoDone(id: string, done: boolean): Promise<void> {
   requireUser();
   await updateDoc(doc(db, TODOS_COLLECTION, id), { done });
 }
 
+/** Deletes a to-do item by its document ID. */
 export async function deleteTodo(id: string): Promise<void> {
   requireUser();
   await deleteDoc(doc(db, TODOS_COLLECTION, id));
