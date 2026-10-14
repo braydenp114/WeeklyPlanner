@@ -25,6 +25,7 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
 
 # macOS
 .DS_Store
@@ -54,3 +55,6 @@ CLAUDE.md
 .vscode/
 
 .agents
+implementation_plan.md
+functions/lib/
+

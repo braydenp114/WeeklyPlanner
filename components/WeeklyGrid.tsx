@@ -11,7 +11,7 @@ import {
 
 
 import { useAuth } from '@/context/AuthContext';
-import { useNav } from '@/context/NavContext';
+import { useNav, DropTarget } from '@/context/NavContext';
 import { ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ListFilter, Menu, Repeat, X } from 'lucide-react-native';
 import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -35,12 +35,20 @@ import {
   formatHourLabel,
   NOW_LINE_COLOR,
 } from './calendar-shared';
+import { useTravelSettings } from '@/context/TravelSettingsContext';
+import { TravelConnectorChip } from './TravelConnectorChip';
 
 // Re-exported so existing imports from '@/components/WeeklyGrid' keep working
 export type { TaskItem } from './calendar-shared';
-export { HoverableTaskCard, getPastEventStyle } from './calendar-shared';
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
+
+/** Wraps the callback-based measureInWindow in a promise so several columns can be measured in sequence. */
+function measureInWindowAsync(view: View): Promise<{ x: number; y: number; width: number; height: number }> {
+  return new Promise((resolve) => {
+    view.measureInWindow((x, y, width, height) => resolve({ x, y, width, height }));
+  });
+}
 
 const locale = Intl.DateTimeFormat().resolvedOptions().locale;
 const dayFormatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
@@ -222,8 +230,10 @@ export default function WeeklyGrid() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const { user, loading: authLoading } = useAuth();
-  const { isDesktop, setIsMobileMenuOpen, openNewTaskModal, taskRefreshKey } = useNav();
+  const { isDesktop, setIsMobileMenuOpen, openNewTaskModal, taskRefreshKey, draggingTodo, registerDropTargets } = useNav();
+  const dayColumnRefs = useRef<(View | null)[]>([]);
   const { challenges } = useStreaks();
+  const { travelMode, comfortBufferMinutes } = useTravelSettings();
 
   const [currentDate, setCurrentDate] = useState(new Date());
 
@@ -328,6 +338,42 @@ export default function WeeklyGrid() {
   const firstDay = weekDates[0];
   const lastDay = weekDates[weekDates.length - 1];
 
+  // ── While a to-do is being dragged, measure the day columns so NavContext can hit-test
+  // the drop against them. Each day column is measured once; hours within it are computed
+  // from ROW_HEIGHT rather than measuring all 24 cells individually. ──
+  useEffect(() => {
+    if (!draggingTodo) {
+      registerDropTargets([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const targets: DropTarget[] = [];
+      for (let dayIdx = 0; dayIdx < weekDates.length; dayIdx++) {
+        const column = dayColumnRefs.current[dayIdx];
+        if (!column) continue;
+        const bounds = await measureInWindowAsync(column);
+        for (const hour of hours) {
+          targets.push({
+            date: weekDates[dayIdx],
+            hour,
+            x: bounds.x,
+            y: bounds.y + hour * ROW_HEIGHT,
+            width: bounds.width,
+            height: ROW_HEIGHT,
+          });
+        }
+      }
+      if (!cancelled) registerDropTargets(targets);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // weekDates is a new array each render; comparing its content would need a deep check,
+    // so we deliberately only re-measure when the drag itself starts or stops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingTodo, registerDropTargets]);
+
   // ── Compute date range for fetching ──
   const rangeStart = firstDay ? new Date(firstDay) : new Date();
   rangeStart.setHours(0, 0, 0, 0);
@@ -407,7 +453,9 @@ export default function WeeklyGrid() {
     );
   }, [allDayTasks, completionFilter]);
 
-  // ── Layout Algorithm for Staggered Events ──
+  // ── Layout Algorithm for Overlapping Events ──
+  // Groups overlapping tasks into concurrent clusters and assigns each task a column index (col)
+  // and the total concurrent column count (maxCols) to render side-by-side equal-width columns.
   const layoutMap = useMemo(() => {
     const map = new Map<string, { col: number; maxCols: number }>();
 
@@ -720,11 +768,12 @@ export default function WeeklyGrid() {
                       .filter((t) => t.dayIndex === dayIdx)
                       .map((task) => {
                         const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
+                        const isCompleted = !!task.originalTaskData.completed;
                         return (
                           <HoverableTaskCard
                             key={task.id}
                             task={task}
-                            style={[styles.allDayChip, getPastEventStyle(isPast, task.colorHex)]}
+                            style={[styles.allDayChip, getPastEventStyle(isPast || isCompleted, task.colorHex)]}
                             onPress={handleTaskClick}
                           >
                             <Text
@@ -761,7 +810,11 @@ export default function WeeklyGrid() {
               {/* Day columns */}
               <View style={styles.daysRow}>
                 {weekDates.map((date, dayIdx) => (
-                  <View key={`${date.toISOString()}-column`} style={[styles.dayColumn, { borderLeftColor: gridLineColor }]}>
+                  <View
+                    key={`${date.toISOString()}-column`}
+                    ref={(el) => { dayColumnRefs.current[dayIdx] = el; }}
+                    style={[styles.dayColumn, { borderLeftColor: gridLineColor }]}
+                  >
                     {hours.map((hour) => (
                       <TouchableOpacity
                         key={`${date.toISOString()}-${hour}`}
@@ -782,6 +835,7 @@ export default function WeeklyGrid() {
                         const maxCols = layout?.maxCols || 1;
                         const height = Math.max(task.durationHours * ROW_HEIGHT - 2, 18);
                         const isPast = task.originalTaskData.endDate.toDate().getTime() < currentDate.getTime();
+                        const isCompleted = !!task.originalTaskData.completed;
 
                         return (
                           <HoverableTaskCard
@@ -789,11 +843,11 @@ export default function WeeklyGrid() {
                             task={task}
                             style={[
                               styles.taskCard,
-                              getPastEventStyle(isPast, task.colorHex),
+                              getPastEventStyle(isPast || isCompleted, task.colorHex),
                               {
                                 top: task.startHour * ROW_HEIGHT + 1,
                                 height,
-                                // Overlapping tasks sit side by side instead of covering each other
+                                // Overlapping tasks sit side by side in equal-width columns instead of covering each other
                                 left: `${(col / maxCols) * 100}%`,
                                 width: `${100 / maxCols}%`,
                                 borderColor: surface,
@@ -807,6 +861,38 @@ export default function WeeklyGrid() {
                           </HoverableTaskCard>
                         );
                       })}
+
+                    {/* Travel connectors between consecutive location-based tasks */}
+                    {(() => {
+                      const dayLocationTasks = visibleTasks
+                        .filter(
+                          (t) =>
+                            t.dayIndex === dayIdx &&
+                            !t.isAllDay &&
+                            typeof t.originalTaskData.latitude === 'number' &&
+                            typeof t.originalTaskData.longitude === 'number'
+                        )
+                        .sort((a, b) => a.startHour - b.startHour);
+
+                      const pairs: { fromTask: TaskItem; toTask: TaskItem }[] = [];
+                      for (let i = 0; i < dayLocationTasks.length - 1; i++) {
+                        pairs.push({
+                          fromTask: dayLocationTasks[i],
+                          toTask: dayLocationTasks[i + 1],
+                        });
+                      }
+
+                      return pairs.map((pair) => (
+                        <TravelConnectorChip
+                          key={`travel-${pair.fromTask.id}-${pair.toTask.id}`}
+                          fromTask={pair.fromTask}
+                          toTask={pair.toTask}
+                          travelMode={travelMode}
+                          bufferMinutes={comfortBufferMinutes}
+                          rowHeight={ROW_HEIGHT}
+                        />
+                      ));
+                    })()}
 
                     {/* Current time indicator */}
                     {isToday(date) && (

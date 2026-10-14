@@ -4,18 +4,24 @@ import 'react-native-reanimated';
 
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemePreferenceProvider } from '@/context/ThemePreferenceContext';
+import { TravelSettingsProvider } from '@/context/TravelSettingsContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 import React, { useEffect } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
+import { syncAllGeofences } from '@/services/geofenceService';
 
 export const unstable_settings = {
   anchor: '(tabs)',
 };
 
+/** Root app layout configuring providers, background geofencing, and main stack navigation. */
 export default function RootLayout() {
   return (
     <ThemePreferenceProvider>
-      <AppContent />
+      <TravelSettingsProvider>
+        <AppContent />
+      </TravelSettingsProvider>
     </ThemePreferenceProvider>
   );
 }
@@ -40,6 +46,21 @@ function AppContent() {
     }
   }, []);
 
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        syncAllGeofences().catch(console.error);
+      }
+    });
+
+    // Also sync on initial mount
+    syncAllGeofences().catch(console.error);
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   return (
     <AuthProvider>
       <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -47,7 +68,6 @@ function AppContent() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="settings" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

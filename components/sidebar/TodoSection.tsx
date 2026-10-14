@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Circle, CircleCheck, Plus, X } from 'lucide-react-native';
+import { Plus } from 'lucide-react-native';
 import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useAuth } from '@/context/AuthContext';
 import { addTodo, deleteTodo, getTodos, setTodoDone, Todo } from '@/services/todosService';
 import { toDayKey } from '@/utils/streakChallenge';
 import { SidebarSection } from './SidebarSection';
+import { DraggableTodoRow } from './DraggableTodoRow';
+import { useNav } from '@/context/NavContext';
 
 type DueChoice = 'none' | 'today' | 'tomorrow';
 
@@ -29,6 +31,7 @@ export function TodoSection() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const { user, loading: authLoading } = useAuth();
+  const { registerTodoScheduledHandler } = useNav();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [text, setText] = useState('');
   const [due, setDue] = useState<DueChoice>('none');
@@ -89,6 +92,13 @@ export function TodoSection() {
     }
   };
 
+  // Dropping a to-do onto an empty grid slot schedules it, then removes it from the
+  // checklist box the same way the delete button does. Re-registers every render so
+  // this always calls the current handleDelete, never a stale one.
+  useEffect(() => {
+    registerTodoScheduledHandler(handleDelete);
+  });
+
   // Open items: dated ones first (overdue → today → later), then undated, each by title
   const open = useMemo(
     () =>
@@ -106,29 +116,16 @@ export function TodoSection() {
 
   const renderItem = (todo: Todo) => {
     const overdue = !!todo.dueDate && todo.dueDate < todayKey && !todo.done;
-    const Check = todo.done ? CircleCheck : Circle;
+    const dueText = todo.dueDate ? dueLabel(todo.dueDate, todayKey, tomorrowKey) : null;
     return (
-      <View key={todo.id} style={styles.item}>
-        <TouchableOpacity onPress={() => handleToggle(todo)} hitSlop={8} accessibilityLabel={todo.done ? 'Mark not done' : 'Mark done'}>
-          <Check size={18} color={todo.done ? theme.primaryAction : theme.textSecondary} strokeWidth={2} />
-        </TouchableOpacity>
-        <View style={styles.itemText}>
-          <Text
-            style={[styles.itemTitle, { color: todo.done ? theme.textMuted : theme.text }, todo.done && styles.strike]}
-            numberOfLines={2}
-          >
-            {todo.title}
-          </Text>
-          {!!todo.dueDate && !todo.done && (
-            <Text style={[styles.itemDue, { color: overdue ? theme.error : theme.textSecondary }]}>
-              {dueLabel(todo.dueDate, todayKey, tomorrowKey)}
-            </Text>
-          )}
-        </View>
-        <TouchableOpacity onPress={() => handleDelete(todo)} hitSlop={8} accessibilityLabel="Delete to-do">
-          <X size={15} color={theme.textMuted} strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
+      <DraggableTodoRow
+        key={todo.id}
+        todo={todo}
+        overdue={overdue}
+        dueText={dueText}
+        onToggle={handleToggle}
+        onDelete={handleDelete}
+      />
     );
   };
 
@@ -227,29 +224,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.body,
     fontSize: 12,
     fontWeight: '500',
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-  },
-  itemText: {
-    flex: 1,
-  },
-  itemTitle: {
-    fontFamily: Fonts.body,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  itemDue: {
-    fontFamily: Fonts.body,
-    fontSize: 11,
-    marginTop: 1,
-  },
-  strike: {
-    textDecorationLine: 'line-through',
   },
   doneToggle: {
     paddingHorizontal: 12,

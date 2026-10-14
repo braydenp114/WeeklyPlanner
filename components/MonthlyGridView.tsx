@@ -174,9 +174,9 @@ export default function MonthlyGridView({ dates, currentDate, tasks, onDayClick,
                         style={[
                           styles.eventRow,
                           { height: rowSize - 2 },
-                          asBar && getPastEventStyle(isPast, task.colorHex),
+                          asBar && getPastEventStyle(isPast || completed, task.colorHex),
                           asBar && styles.eventBar,
-                          !asBar && isPast && { opacity: 0.6 },
+                          !asBar && (isPast || completed) && { opacity: 0.6 },
                         ]}
                         onPress={(t, rect) => onTaskClick?.(t, rect)}
                       >

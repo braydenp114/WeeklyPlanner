@@ -39,6 +39,7 @@ function requireUser() {
   return currentUser;
 }
 
+/** Fetches all streak challenges for the authenticated user, ordered oldest first. */
 export async function getStreakChallenges(): Promise<StreakChallenge[]> {
   const user = requireUser();
   const q = query(collection(db, STREAKS_COLLECTION), where('ownerId', '==', user.uid));
@@ -60,6 +61,7 @@ export async function getStreakChallenges(): Promise<StreakChallenge[]> {
   return challenges.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
 }
 
+/** Creates a new streak challenge starting from today's midnight. */
 export async function addStreakChallenge(input: StreakChallengeInput): Promise<string> {
   const user = requireUser();
   const start = new Date();
@@ -75,6 +77,7 @@ export async function addStreakChallenge(input: StreakChallengeInput): Promise<s
   return ref.id;
 }
 
+/** Updates fields of an existing streak challenge. */
 export async function updateStreakChallenge(id: string, input: Partial<StreakChallengeInput>): Promise<void> {
   requireUser();
   await updateDoc(doc(db, STREAKS_COLLECTION, id), input);
@@ -88,6 +91,7 @@ export async function setCheckIn(id: string, dayKey: string, checkedIn: boolean)
   });
 }
 
+/** Deletes a streak challenge document by its ID. */
 export async function deleteStreakChallenge(id: string): Promise<void> {
   requireUser();
   await deleteDoc(doc(db, STREAKS_COLLECTION, id));
