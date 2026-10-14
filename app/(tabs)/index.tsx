@@ -4,6 +4,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import { StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+/** Main calendar planner screen rendering the responsive WeeklyGrid. */
 export default function HomeScreen() {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[scheme];

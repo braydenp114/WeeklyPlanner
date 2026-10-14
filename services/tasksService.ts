@@ -14,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 import { generateOccurrenceDates, getRecurrenceEndBound, MAX_OCCURRENCES_PER_TASK } from '../utils/expandRecurrences';
+import { getCompletionWindow } from '../utils/geofenceWindow';
 
 export type TaskRecurrence =
   | "none"
@@ -65,6 +66,12 @@ export interface Task {
   seriesId?: string;
   /** Whether this task itself is marked as done. */
   completed?: boolean;
+  /** When this task was marked as completed */
+  completedAt?: Timestamp | null;
+  /** How this task was marked completed */
+  completedBy?: 'manual' | 'geofence' | null;
+  /** Radius in meters for geofence (default 150) */
+  geofenceRadiusMeters?: number;
   /** Whether this task has an attached sub-item checklist. */
   hasChecklist?: boolean;
   /** Sub-items shown when hasChecklist is true. */
@@ -201,8 +208,8 @@ export async function createTask(data: CreateTaskData): Promise<string> {
 /**
  * Retrieves tasks for the authenticated user within a specific date range.
  * Note: A composite index on (ownerId ASC, startDate ASC) is required for this query.
- * Note on Recurring Tasks: This query only fetches based on `startDate`. If a task was created before the range
- * but recurs within it, it will NOT be returned by this basic query. Client-side expansion or denormalization is needed later.
+ * Note: Recurring tasks are materialized as individual documents on creation,
+ * so each occurrence has its own startDate and is returned directly by this query.
  */
 export async function getTasksForRange(
   start: Date,
@@ -230,56 +237,6 @@ export async function getTasksForRange(
   return tasks;
 }
 
-/**
- * Retrieves recurring task definitions that could potentially recur into a given range.
- *
- * Queries: ownerId == currentUser.uid, startDate <= rangeEnd
- * Client-side filters:
- *   - recurrence !== 'none'
- *   - recurrenceEndDate is null OR recurrenceEndDate >= rangeStart (skip expired recurring tasks)
- *
- * NOTE: Requires a composite index on (ownerId ASC, startDate ASC) — same index as getTasksForRange.
- *
- * KNOWN SCALING LIMITATION: For users with many years of recurring tasks, this query still reads all
- * non-expired recurring definitions. At very large scale, consider denormalizing occurrences or adding
- * server-side recurrence expansion.
- */
-export async function getRecurringTasks(
-  rangeStart: Date,
-  rangeEnd: Date,
-): Promise<Task[]> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error("User not authenticated");
-
-  const rangeEndTimestamp = Timestamp.fromDate(rangeEnd);
-  const rangeStartTimestamp = Timestamp.fromDate(rangeStart);
-
-  // Fetch all user tasks that started on or before rangeEnd
-  const q = query(
-    collection(db, TASKS_COLLECTION),
-    where("ownerId", "==", currentUser.uid),
-    where("startDate", "<=", rangeEndTimestamp),
-  );
-
-  const querySnapshot = await getDocs(q);
-  const tasks: Task[] = [];
-  querySnapshot.forEach((docSnap) => {
-    const data = { id: docSnap.id, ...docSnap.data() } as Task;
-
-    // Client-side filter: only recurring tasks
-    if (data.recurrence === "none") return;
-
-    // Client-side filter: skip expired recurring tasks whose end date is before the visible range
-    if (data.recurrenceEndDate) {
-      const endDate = data.recurrenceEndDate.toDate();
-      if (endDate < rangeStart) return;
-    }
-
-    tasks.push(data);
-  });
-
-  return tasks;
-}
 
 /**
  * Updates an existing task.
@@ -500,62 +457,6 @@ export async function getUpcomingDeadlines(): Promise<Task[]> {
   return deadlines;
 }
 
-export interface UnallocatedDeadline {
-  task: Task;
-  hoursUntilDeadline: number;
-}
-
-/**
- * Finds deadlines within their warning window that have no linked tasks
- * (i.e. no time has been allocated toward them).
- */
-export async function getUnallocatedDeadlines(): Promise<
-  UnallocatedDeadline[]
-> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error("User not authenticated");
-
-  const now = new Date();
-  const lookahead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-
-  const q = query(
-    collection(db, TASKS_COLLECTION),
-    where("ownerId", "==", currentUser.uid),
-    where("isDeadline", "==", true),
-    where("startDate", ">=", Timestamp.fromDate(now)),
-    where("startDate", "<=", Timestamp.fromDate(lookahead)),
-  );
-
-  const snapshot = await getDocs(q);
-  const deadlines: Task[] = [];
-  snapshot.forEach((doc) => {
-    deadlines.push({ id: doc.id, ...doc.data() } as Task);
-  });
-
-  const results: UnallocatedDeadline[] = [];
-
-  for (const deadline of deadlines) {
-    const warningHours = deadline.deadlineWarningHours ?? 72;
-    const deadlineDate = deadline.startDate.toDate();
-    const hoursUntil =
-      (deadlineDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-    if (hoursUntil > warningHours) continue;
-
-    const linkedQuery = query(
-      collection(db, TASKS_COLLECTION),
-      where("ownerId", "==", currentUser.uid),
-      where("linkedDeadlineId", "==", deadline.id),
-    );
-    const linkedSnapshot = await getDocs(linkedQuery);
-
-    if (linkedSnapshot.empty) {
-      results.push({ task: deadline, hoursUntilDeadline: hoursUntil });
-    }
-  }
-
-  return results;
-}
 export interface LogActualParams {
   status: "as_planned" | "different";
   substitutedActivity?: string | null;
@@ -646,4 +547,50 @@ export function calculateWeeklyReview(tasks: Task[]): CategoryReviewStats[] {
   }
 
   return Array.from(statsByCategory.values());
+}
+
+/**
+ * Retrieves all incomplete, location-tagged tasks (and next occurrences of recurring tasks)
+ * scheduled within the next 48 hours. Used for syncing geofence regions.
+ */
+export async function getUpcomingLocationTasks(): Promise<Task[]> {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('User not authenticated');
+
+  const now = new Date();
+  const lowerBound = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const lookahead = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+  // Query tasks starting between lowerBound (-24h) and lookahead (+48h).
+  // Uses existing composite index on (ownerId ASC, startDate ASC).
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where('ownerId', '==', currentUser.uid),
+    where('startDate', '>=', Timestamp.fromDate(lowerBound)),
+    where('startDate', '<=', Timestamp.fromDate(lookahead))
+  );
+
+  const snapshot = await getDocs(q);
+  const tasks: Task[] = [];
+  
+  snapshot.forEach((docSnap) => {
+    const task = { id: docSnap.id, ...docSnap.data() } as Task;
+    
+    // Only tasks with coordinates (custom-searched or preset locations) that aren't completed
+    if (task.latitude == null || task.longitude == null) return;
+    if (task.completed) return;
+    
+    // Skip once its completion window (including any grace period) has closed
+    if (getCompletionWindow(task).end < now.getTime()) return;
+
+    // We have a composite index on ownerId ASC, startDate ASC, so we can't easily 
+    // filter `endDate >= now` on the server at the same time. The client-side filter is fine.
+    
+    tasks.push(task);
+  });
+
+  // Sort by start date to get the most imminent ones
+  tasks.sort((a, b) => a.startDate.toMillis() - b.startDate.toMillis());
+
+  return tasks;
 }

@@ -41,6 +41,7 @@ const AuthContext = createContext<AuthContextType>({
   signOutUser: async () => {},
 });
 
+/** Provides Firebase authentication state and email/Google sign-in methods. */
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -125,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         await GoogleSignin.hasPlayServices();
         const signInResult = await GoogleSignin.signIn();
-        const idToken = signInResult?.data?.idToken;
+        const idToken = signInResult?.data?.idToken ?? (signInResult as any)?.idToken;
         if (!idToken) {
           throw new Error('Google Sign-In failed: no ID token received.');
         }
@@ -170,4 +171,5 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
+/** Hook to access current authenticated user and authentication actions. */
 export const useAuth = () => useContext(AuthContext);

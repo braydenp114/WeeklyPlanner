@@ -1,6 +1,10 @@
 import { Timestamp } from 'firebase/firestore';
 import { Task, CustomRecurrenceRule } from '@/services/tasksService';
 
+/**
+ * Hard cap on the number of individual occurrence documents generated per save.
+ * Prevents runaway database writes, regardless of recurrence frequency or timeframe.
+ */
 export const MAX_OCCURRENCES_PER_TASK = 366;
 
 // ─── Internal Helpers ─────────────────────────────────────────────────────────
@@ -12,6 +16,10 @@ function formatDateKey(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+/**
+ * Resolves the effective cutoff date for recurrence expansion,
+ * choosing the earlier of the rule's recurrenceEndDate and the caller's rangeEnd bound.
+ */
 export function getRecurrenceEndBound(task: Task, rangeEnd: Date): Date {
   let bound = rangeEnd;
 

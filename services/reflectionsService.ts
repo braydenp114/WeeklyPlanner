@@ -33,6 +33,7 @@ export async function getReflections(fromDay: string, toDay: string): Promise<Da
   return result.sort((a, b) => a.day.localeCompare(b.day));
 }
 
+/** Upserts an end-of-day reflection document for the specified day (YYYY-MM-DD). */
 export async function saveReflection(day: string, mood: Mood, note: string): Promise<void> {
   const user = requireUser();
   await setDoc(doc(db, REFLECTIONS_COLLECTION, `${user.uid}_${day}`), {

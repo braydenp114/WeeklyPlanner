@@ -14,21 +14,15 @@ import { useReminderSync } from "@/hooks/use-task-reminders";
 import { useArrivalDetection } from "@/hooks/use-arrival-detection";
 import { FocusProvider } from "@/context/FocusContext";
 import { FocusBar } from "@/components/FocusBar";
+import { DragGhost } from "@/components/DragGhost";
 
 function ResponsiveLayout() {
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[colorScheme];
-  const {
-    isMobileMenuOpen,
-    setIsMobileMenuOpen,
-    isDesktop,
-    isNewTaskModalOpen,
-    closeNewTaskModal,
-    openNewTaskModal,
-    newTaskPrefillDate,
-    newTaskPrefillHour,
-    refreshTasks,
-    taskRefreshKey,
+  const { 
+    isMobileMenuOpen, setIsMobileMenuOpen, isDesktop, 
+    isNewTaskModalOpen, closeNewTaskModal, openNewTaskModal,
+    newTaskPrefillDate, newTaskPrefillHour, newTaskPrefillName, refreshTasks, taskRefreshKey
   } = useNav();
   // Keep the phone's task reminders in sync with the saved tasks
   useReminderSync(taskRefreshKey);
@@ -62,7 +56,10 @@ function ResponsiveLayout() {
         onSaved={refreshTasks}
         prefillDate={newTaskPrefillDate}
         prefillHour={newTaskPrefillHour}
+        prefillName={newTaskPrefillName}
       />
+
+      <DragGhost />
     </View>
   );
 }
