@@ -8,6 +8,9 @@ import type { PresetLocation } from "@/constants/presetLocations";
 import { logArrival } from "@/services/locationLogService";
 import { getLocationSharing } from "@/services/settingsService";
 import { detectArrival, findPresetAt } from "@/utils/geo";
+import { Timestamp } from "firebase/firestore";
+import { getUpcomingLocationTasks, updateTask } from "@/services/tasksService";
+import { shouldAutoMarkByType } from "@/utils/autoMark";
 
 const CHECK_INTERVAL_MS = 30000;
 
@@ -33,6 +36,19 @@ async function notifyArrival(preset: PresetLocation) {
     },
     trigger: null,
   });
+}
+
+async function autoMarkTasks(preset: PresetLocation) {
+  const now = Date.now();
+  const tasks = await getUpcomingLocationTasks();
+  for (const task of tasks) {
+    if (!task.id || !shouldAutoMarkByType(task, preset, now)) continue;
+    await updateTask(task.id, {
+      completed: true,
+      completedBy: "arrival",
+      completedAt: Timestamp.fromMillis(now),
+    });
+  }
 }
 
 async function getCoords(): Promise<Coords | null> {
@@ -72,6 +88,7 @@ export function useArrivalDetection() {
         if (arrival) {
           await logArrival(arrival);
           await notifyArrival(arrival);
+          await autoMarkTasks(arrival);
         }
       } catch (e) {
         console.error("[useArrivalDetection] check failed:", e);

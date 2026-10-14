@@ -11,10 +11,14 @@ import {
   serverTimestamp,
   writeBatch,
   increment,
-} from 'firebase/firestore';
-import { db, auth } from '../config/firebase';
-import { generateOccurrenceDates, getRecurrenceEndBound, MAX_OCCURRENCES_PER_TASK } from '../utils/expandRecurrences';
-import { getCompletionWindow } from '../utils/geofenceWindow';
+} from "firebase/firestore";
+import { db, auth } from "../config/firebase";
+import {
+  generateOccurrenceDates,
+  getRecurrenceEndBound,
+  MAX_OCCURRENCES_PER_TASK,
+} from "../utils/expandRecurrences";
+import { getCompletionWindow } from "../utils/geofenceWindow";
 
 export type TaskRecurrence =
   | "none"
@@ -69,7 +73,7 @@ export interface Task {
   /** When this task was marked as completed */
   completedAt?: Timestamp | null;
   /** How this task was marked completed */
-  completedBy?: 'manual' | 'geofence' | null;
+  completedBy?: "manual" | "geofence" | "arrival" | null;
   /** Radius in meters for geofence (default 150) */
   geofenceRadiusMeters?: number;
   /** Whether this task has an attached sub-item checklist. */
@@ -123,10 +127,10 @@ export async function createTask(data: CreateTaskData): Promise<string> {
     ownerId: currentUser.uid,
     createdAt: serverTimestamp(),
     // Recurring tasks become streak-eligible on save, with no extra setup from the user
-    streakEligible: data.recurrence !== 'none',
+    streakEligible: data.recurrence !== "none",
   };
 
-  if (data.recurrence === 'none') {
+  if (data.recurrence === "none") {
     // Reminders are scheduled by useReminderSync after the task list refreshes
     const docRef = await addDoc(collection(db, TASKS_COLLECTION), baseDocData);
     return docRef.id;
@@ -237,7 +241,6 @@ export async function getTasksForRange(
   return tasks;
 }
 
-
 /**
  * Updates an existing task.
  */
@@ -316,12 +319,12 @@ export async function updateSeries(
  */
 export async function getSeriesOccurrences(seriesId: string): Promise<Task[]> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const q = query(
     collection(db, TASKS_COLLECTION),
-    where('ownerId', '==', currentUser.uid),
-    where('seriesId', '==', seriesId)
+    where("ownerId", "==", currentUser.uid),
+    where("seriesId", "==", seriesId),
   );
 
   const snapshot = await getDocs(q);
@@ -339,16 +342,19 @@ export async function getSeriesOccurrences(seriesId: string): Promise<Task[]> {
  * is removed and the task is recreated with the new repeat rule.
  * Earlier occurrences of a series are kept, so past completions and streak history stay.
  */
-export async function replaceRecurrence(original: Task, data: CreateTaskData): Promise<string> {
+export async function replaceRecurrence(
+  original: Task,
+  data: CreateTaskData,
+): Promise<string> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   if (original.seriesId) {
     const fromMs = original.startDate.toDate().getTime();
     const q = query(
       collection(db, TASKS_COLLECTION),
-      where('ownerId', '==', currentUser.uid),
-      where('seriesId', '==', original.seriesId)
+      where("ownerId", "==", currentUser.uid),
+      where("seriesId", "==", original.seriesId),
     );
     const snapshot = await getDocs(q);
     const refsToDelete = snapshot.docs
@@ -357,7 +363,9 @@ export async function replaceRecurrence(original: Task, data: CreateTaskData): P
 
     for (let i = 0; i < refsToDelete.length; i += OCCURRENCE_BATCH_SIZE) {
       const batch = writeBatch(db);
-      refsToDelete.slice(i, i + OCCURRENCE_BATCH_SIZE).forEach((ref) => batch.delete(ref));
+      refsToDelete
+        .slice(i, i + OCCURRENCE_BATCH_SIZE)
+        .forEach((ref) => batch.delete(ref));
       await batch.commit();
     }
   } else if (original.id) {
@@ -489,12 +497,17 @@ export async function logTaskActual(
  * Adds focus-timer minutes to a task. Uses Firestore's increment so two sessions
  * (or two devices) never overwrite each other.
  */
-export async function addFocusMinutes(id: string, minutes: number): Promise<void> {
+export async function addFocusMinutes(
+  id: string,
+  minutes: number,
+): Promise<void> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
   if (minutes <= 0) return;
 
-  await updateDoc(doc(db, TASKS_COLLECTION, id), { actualMinutes: increment(minutes) });
+  await updateDoc(doc(db, TASKS_COLLECTION, id), {
+    actualMinutes: increment(minutes),
+  });
 }
 
 export interface CategoryReviewStats {
@@ -555,7 +568,7 @@ export function calculateWeeklyReview(tasks: Task[]): CategoryReviewStats[] {
  */
 export async function getUpcomingLocationTasks(): Promise<Task[]> {
   const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('User not authenticated');
+  if (!currentUser) throw new Error("User not authenticated");
 
   const now = new Date();
   const lowerBound = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -565,27 +578,27 @@ export async function getUpcomingLocationTasks(): Promise<Task[]> {
   // Uses existing composite index on (ownerId ASC, startDate ASC).
   const q = query(
     collection(db, TASKS_COLLECTION),
-    where('ownerId', '==', currentUser.uid),
-    where('startDate', '>=', Timestamp.fromDate(lowerBound)),
-    where('startDate', '<=', Timestamp.fromDate(lookahead))
+    where("ownerId", "==", currentUser.uid),
+    where("startDate", ">=", Timestamp.fromDate(lowerBound)),
+    where("startDate", "<=", Timestamp.fromDate(lookahead)),
   );
 
   const snapshot = await getDocs(q);
   const tasks: Task[] = [];
-  
+
   snapshot.forEach((docSnap) => {
     const task = { id: docSnap.id, ...docSnap.data() } as Task;
-    
+
     // Only tasks with coordinates (custom-searched or preset locations) that aren't completed
     if (task.latitude == null || task.longitude == null) return;
     if (task.completed) return;
-    
+
     // Skip once its completion window (including any grace period) has closed
     if (getCompletionWindow(task).end < now.getTime()) return;
 
-    // We have a composite index on ownerId ASC, startDate ASC, so we can't easily 
+    // We have a composite index on ownerId ASC, startDate ASC, so we can't easily
     // filter `endDate >= now` on the server at the same time. The client-side filter is fine.
-    
+
     tasks.push(task);
   });
 
