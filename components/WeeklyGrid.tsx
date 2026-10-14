@@ -11,7 +11,7 @@ import {
 
 
 import { useAuth } from '@/context/AuthContext';
-import { useNav } from '@/context/NavContext';
+import { useNav, DropTarget } from '@/context/NavContext';
 import { ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ListFilter, Menu, Repeat, X } from 'lucide-react-native';
 import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
@@ -42,6 +42,13 @@ import { TravelConnectorChip } from './TravelConnectorChip';
 export type { TaskItem } from './calendar-shared';
 
 const hours = Array.from({ length: 24 }, (_, i) => i);
+
+/** Wraps the callback-based measureInWindow in a promise so several columns can be measured in sequence. */
+function measureInWindowAsync(view: View): Promise<{ x: number; y: number; width: number; height: number }> {
+  return new Promise((resolve) => {
+    view.measureInWindow((x, y, width, height) => resolve({ x, y, width, height }));
+  });
+}
 
 const locale = Intl.DateTimeFormat().resolvedOptions().locale;
 const dayFormatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
@@ -223,7 +230,8 @@ export default function WeeklyGrid() {
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const theme = Colors[scheme];
   const { user, loading: authLoading } = useAuth();
-  const { isDesktop, setIsMobileMenuOpen, openNewTaskModal, taskRefreshKey } = useNav();
+  const { isDesktop, setIsMobileMenuOpen, openNewTaskModal, taskRefreshKey, draggingTodo, registerDropTargets } = useNav();
+  const dayColumnRefs = useRef<(View | null)[]>([]);
   const { challenges } = useStreaks();
   const { travelMode, comfortBufferMinutes } = useTravelSettings();
 
@@ -329,6 +337,42 @@ export default function WeeklyGrid() {
   const weekDates = getGridDates(viewMode, dateOffset);
   const firstDay = weekDates[0];
   const lastDay = weekDates[weekDates.length - 1];
+
+  // ── While a to-do is being dragged, measure the day columns so NavContext can hit-test
+  // the drop against them. Each day column is measured once; hours within it are computed
+  // from ROW_HEIGHT rather than measuring all 24 cells individually. ──
+  useEffect(() => {
+    if (!draggingTodo) {
+      registerDropTargets([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const targets: DropTarget[] = [];
+      for (let dayIdx = 0; dayIdx < weekDates.length; dayIdx++) {
+        const column = dayColumnRefs.current[dayIdx];
+        if (!column) continue;
+        const bounds = await measureInWindowAsync(column);
+        for (const hour of hours) {
+          targets.push({
+            date: weekDates[dayIdx],
+            hour,
+            x: bounds.x,
+            y: bounds.y + hour * ROW_HEIGHT,
+            width: bounds.width,
+            height: ROW_HEIGHT,
+          });
+        }
+      }
+      if (!cancelled) registerDropTargets(targets);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // weekDates is a new array each render; comparing its content would need a deep check,
+    // so we deliberately only re-measure when the drag itself starts or stops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggingTodo, registerDropTargets]);
 
   // ── Compute date range for fetching ──
   const rangeStart = firstDay ? new Date(firstDay) : new Date();
@@ -766,7 +810,11 @@ export default function WeeklyGrid() {
               {/* Day columns */}
               <View style={styles.daysRow}>
                 {weekDates.map((date, dayIdx) => (
-                  <View key={`${date.toISOString()}-column`} style={[styles.dayColumn, { borderLeftColor: gridLineColor }]}>
+                  <View
+                    key={`${date.toISOString()}-column`}
+                    ref={(el) => { dayColumnRefs.current[dayIdx] = el; }}
+                    style={[styles.dayColumn, { borderLeftColor: gridLineColor }]}
+                  >
                     {hours.map((hour) => (
                       <TouchableOpacity
                         key={`${date.toISOString()}-${hour}`}
