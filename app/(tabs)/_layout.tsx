@@ -11,6 +11,7 @@ import NewTaskModal from "@/components/NewTaskModal";
 import { NavProvider, useNav } from "@/context/NavContext";
 import { StreaksProvider } from "@/context/StreaksContext";
 import { useReminderSync } from "@/hooks/use-task-reminders";
+import { useArrivalDetection } from "@/hooks/use-arrival-detection";
 import { FocusProvider } from "@/context/FocusContext";
 import { FocusBar } from "@/components/FocusBar";
 import { DragGhost } from "@/components/DragGhost";
@@ -25,6 +26,8 @@ function ResponsiveLayout() {
   } = useNav();
   // Keep the phone's task reminders in sync with the saved tasks
   useReminderSync(taskRefreshKey);
+  // Notice when the user arrives at a preset location (campus or gym)
+  useArrivalDetection();
   const pathname = usePathname();
 
   // Show FAB on mobile, specifically on the root (calendar) page
