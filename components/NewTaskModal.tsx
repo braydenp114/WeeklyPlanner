@@ -189,6 +189,8 @@ export interface NewTaskModalProps {
   /** Pre-fill date/time when opened from a grid slot click */
   prefillDate?: Date;
   prefillHour?: number;
+  /** Pre-fill the task name when opened by dragging a to-do onto the grid. */
+  prefillName?: string;
 }
 
 /**
@@ -201,6 +203,7 @@ export default function NewTaskModal({
   onSaved,
   prefillDate,
   prefillHour,
+  prefillName,
 }: NewTaskModalProps) {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const theme = Colors[scheme];
@@ -588,7 +591,7 @@ export default function NewTaskModal({
         const endDefault = new Date(now);
         endDefault.setHours(endDefault.getHours() + 1);
 
-        setTitle("");
+        setTitle(prefillName ?? "");
         setStartDate(now);
         setEndDate(endDefault);
         setAllDay(false);
@@ -623,7 +626,7 @@ export default function NewTaskModal({
       setNotifPickerOpen(false);
       setNewChecklistItemText("");
     }
-  }, [visible, prefillDate, prefillHour, editTaskData]);
+  }, [visible, prefillDate, prefillHour, prefillName, editTaskData]);
 
   // ── Dynamic recurrence labels ──
   const recurrenceOptions = useMemo(() => {
