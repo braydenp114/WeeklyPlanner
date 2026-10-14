@@ -58,6 +58,7 @@ import {
   LocationAutocomplete,
   LocationCoordinates,
 } from "./ui/LocationAutocomplete";
+import { PRESET_LOCATIONS, LocationType } from "@/constants/presetLocations";
 import { syncAllGeofences } from "@/services/geofenceService";
 
 // ─── Notification Presets ────────────────────────────────────────────────────
@@ -222,6 +223,7 @@ export default function NewTaskModal({
   const [location, setLocation] = useState("");
   const [locationCoordinates, setLocationCoordinates] =
     useState<LocationCoordinates | null>(null);
+  const [locationType, setLocationType] = useState<LocationType | null>(null);
   const [notifications, setNotifications] = useState<
     { type: string; minutesBefore: number }[]
   >([]);
@@ -546,6 +548,7 @@ export default function NewTaskModal({
         setCustomRuleLabel(customLbl);
 
         setLocation(editTaskData.location || "");
+        setLocationType(editTaskData.locationType ?? null);
         if (editTaskData.latitude && editTaskData.longitude) {
           setLocationCoordinates({
             latitude: editTaskData.latitude,
@@ -599,6 +602,7 @@ export default function NewTaskModal({
         setCustomRecurrenceRule(null);
         setCustomRuleLabel("");
         setLocation("");
+        setLocationType(null);
         setLocationCoordinates(null);
         setNotifications([]);
         setColorHex(COLOR_OPTIONS[0].hex);
@@ -691,6 +695,7 @@ export default function NewTaskModal({
         location: location.trim() || null,
         latitude: locationCoordinates?.latitude ?? null,
         longitude: locationCoordinates?.longitude ?? null,
+        locationType,
         notification: notifications.length > 0 ? notifications[0] : null,
         busyStatus,
         visibility,
@@ -808,6 +813,7 @@ export default function NewTaskModal({
     customRecurrenceRule,
     location,
     locationCoordinates,
+    locationType,
     notifications,
     busyStatus,
     visibility,
@@ -1093,12 +1099,14 @@ export default function NewTaskModal({
                 <LocationAutocomplete
                   value={location}
                   onChangeText={(text) => {
+                    setLocationType(null);
                     setLocation(text);
                     if (!text.trim()) {
                       setLocationCoordinates(null);
                     }
                   }}
                   onSelectLocation={(address, coords) => {
+                    setLocationType(null);
                     setLocation(address);
                     setLocationCoordinates(coords || null);
                   }}
@@ -1106,6 +1114,54 @@ export default function NewTaskModal({
                 />
               </View>
 
+              {/* Preset locations */}
+              <View style={[styles.fieldSection, { zIndex: 17 }]}>
+                <View style={styles.fieldIcon} />
+                <View
+                  style={{
+                    flex: 1,
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
+                  {PRESET_LOCATIONS.map((p) => {
+                    const selected =
+                      locationType === p.type && location === p.name;
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={[
+                          inlineStyles.dropBtn,
+                          {
+                            backgroundColor: selected
+                              ? theme.primaryAction
+                              : theme.surfaceContainer,
+                            borderColor: theme.outlineVariant,
+                          },
+                        ]}
+                        onPress={() => {
+                          setLocation(p.name);
+                          setLocationCoordinates({
+                            latitude: p.latitude,
+                            longitude: p.longitude,
+                          });
+                          setLocationType(p.type);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            inlineStyles.dropLabel,
+                            { color: selected ? "#FFFFFF" : theme.text },
+                          ]}
+                        >
+                          {p.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
               {/* Travel Feasibility Advisory Banner */}
               {travelConflictNotice && (
                 <View
@@ -1950,25 +2006,25 @@ const styles = StyleSheet.create({
     bottom: 0,
     backgroundColor: "rgba(0,0,0,0.55)",
   },
- cardContainer: {
-  position: "absolute",
-  top: 50,
-  left: "5%",
-  right: "5%",
-  maxWidth: 560,
-  alignSelf: "center",
-  width: "90%",
+  cardContainer: {
+    position: "absolute",
+    top: 50,
+    left: "5%",
+    right: "5%",
+    maxWidth: 560,
+    alignSelf: "center",
+    width: "90%",
   },
   card: {
-  height: 800,
-  borderRadius: RoundedGeometry.lg,
-  borderWidth: 1,
-  overflow: "hidden",
-  shadowColor: "#000",
-  shadowOffset: { width: 0, height: 8 },
-  shadowOpacity: 0.35,
-  shadowRadius: 24,
-  elevation: 16,
+    height: 800,
+    borderRadius: RoundedGeometry.lg,
+    borderWidth: 1,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 16,
   },
   headerRow: {
     flexDirection: "row",
