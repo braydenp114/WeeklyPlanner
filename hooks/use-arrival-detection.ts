@@ -11,6 +11,8 @@ import { detectArrival, findPresetAt } from "@/utils/geo";
 import { Timestamp } from "firebase/firestore";
 import { getUpcomingLocationTasks, updateTask } from "@/services/tasksService";
 import { shouldAutoMarkByType } from "@/utils/autoMark";
+import { cancelReminder } from "@/hooks/use-task-reminders";
+import { endOfBlockId } from "@/utils/endOfBlock";
 
 const CHECK_INTERVAL_MS = 30000;
 
@@ -48,6 +50,7 @@ async function autoMarkTasks(preset: PresetLocation) {
       completedBy: "arrival",
       completedAt: Timestamp.fromMillis(now),
     });
+    if (Platform.OS !== "web") await cancelReminder(endOfBlockId(task.id));
   }
 }
 
