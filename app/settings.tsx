@@ -2,7 +2,7 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { router } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
-
+import { LocationPrivacySection } from '@/components/LocationPrivacySection';
 import { Colors, Typography, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useThemePreference, ThemePreference } from '@/context/ThemePreferenceContext';
@@ -65,6 +65,7 @@ export default function SettingsScreen() {
           );
         })}
       </View>
+      <LocationPrivacySection />
 
       <Text style={[Typography.labelMd, styles.sectionTitle, { color: theme.textSecondary }]}>Travel & Schedule Feasibility</Text>
       <Text style={[Typography.bodySm, { color: theme.textSecondary, marginLeft: 4, marginTop: -8, fontSize: 13 }]}>
