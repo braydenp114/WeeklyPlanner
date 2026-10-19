@@ -45,6 +45,7 @@ app-example
 /android
 
 # Firebase / Google Services generated files
+.firebase/
 google-services.json
 android/app/google-services.json
 
