@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -12,7 +13,7 @@ import {
 
 import { useAuth } from '@/context/AuthContext';
 import { useNav, DropTarget } from '@/context/NavContext';
-import { ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ListFilter, Menu, Repeat, X } from 'lucide-react-native';
+import { ChevronDown, ChevronLeft, ChevronRight, CircleAlert, ListFilter, Menu, Repeat, Search, X } from 'lucide-react-native';
 import { Colors, Fonts, RoundedGeometry } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import MonthlyGridView from './MonthlyGridView';
@@ -21,6 +22,7 @@ import { ReflectionCard } from './ReflectionCard';
 import { RolloverBanner } from './RolloverBanner';
 import { useStreaks } from '@/context/StreaksContext';
 import { PRIORITY_META } from '@/utils/priority';
+import { filterByQuery, isSearchActive } from '@/utils/taskSearch';
 import { getTasksForRange, Task, deleteTask, deleteSeries } from '@/services/tasksService';
 import { AnchorRect } from './ui/TimeDropdown';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -242,6 +244,9 @@ export default function WeeklyGrid() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [completionFilter, setCompletionFilter] = useState<CompletionFilter>('All');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  // Mobile keeps the field collapsed behind an icon; desktop shows it inline.
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
 
   // ── Popover State ──
@@ -434,24 +439,37 @@ export default function WeeklyGrid() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rangeStart.getTime(), rangeEnd.getTime(), taskRefreshKey, authLoading, user]);
 
-  // ── Completion filter ──
+  // ── Completion filter + keyword search ──
+  // Search runs after the completion filter so the two narrow the grid together.
   const visibleTasks = useMemo(() => {
-    if (completionFilter === 'All') return tasks;
-    return tasks.filter((task) =>
-      completionFilter === 'Completed'
-        ? !!task.originalTaskData.completed
-        : !task.originalTaskData.completed,
-    );
-  }, [tasks, completionFilter]);
+    const byCompletion =
+      completionFilter === 'All'
+        ? tasks
+        : tasks.filter((task) =>
+            completionFilter === 'Completed'
+              ? !!task.originalTaskData.completed
+              : !task.originalTaskData.completed,
+          );
+    return filterByQuery(byCompletion, searchQuery);
+  }, [tasks, completionFilter, searchQuery]);
 
   const visibleAllDayTasks = useMemo(() => {
-    if (completionFilter === 'All') return allDayTasks;
-    return allDayTasks.filter((task) =>
-      completionFilter === 'Completed'
-        ? !!task.originalTaskData.completed
-        : !task.originalTaskData.completed,
-    );
-  }, [allDayTasks, completionFilter]);
+    const byCompletion =
+      completionFilter === 'All'
+        ? allDayTasks
+        : allDayTasks.filter((task) =>
+            completionFilter === 'Completed'
+              ? !!task.originalTaskData.completed
+              : !task.originalTaskData.completed,
+          );
+    return filterByQuery(byCompletion, searchQuery);
+  }, [allDayTasks, completionFilter, searchQuery]);
+
+  // Drives the "No tasks found" empty state: searching, but nothing survived the filter.
+  const hasNoSearchResults =
+    isSearchActive(searchQuery) && visibleTasks.length === 0 && visibleAllDayTasks.length === 0;
+
+  const clearSearch = () => setSearchQuery('');
 
   // ── Layout Algorithm for Overlapping Events ──
   // Groups overlapping tasks into concurrent clusters and assigns each task a column index (col)
@@ -617,6 +635,56 @@ export default function WeeklyGrid() {
             </TouchableOpacity>
           )}
 
+          {isDesktop ? (
+            <View style={[styles.searchField, { borderColor: theme.outline }]}>
+              <View style={styles.searchIconSlot}>
+                <Search size={16} color={theme.textSecondary} strokeWidth={2} />
+              </View>
+              <TextInput
+                testID="task-search-input"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search tasks"
+                placeholderTextColor={theme.textMuted}
+                style={[styles.searchInput, { color: theme.text }]}
+                returnKeyType="search"
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {!!searchQuery && (
+                <TouchableOpacity
+                  testID="task-search-clear"
+                  activeOpacity={0.6}
+                  onPress={clearSearch}
+                  hitSlop={8}
+                >
+                  <X size={15} color={theme.textSecondary} strokeWidth={2} />
+                </TouchableOpacity>
+              )}
+            </View>
+          ) : (
+            <TouchableOpacity
+              testID="task-search-toggle"
+              activeOpacity={0.7}
+              onPress={() => {
+                // Collapsing the field clears the keyword so the full grid comes back.
+                if (isSearchOpen) clearSearch();
+                setIsSearchOpen(!isSearchOpen);
+                setIsFilterOpen(false);
+                setIsDropdownOpen(false);
+              }}
+              style={[
+                styles.pillButton,
+                styles.pillWithIcon,
+                { borderColor: theme.outline },
+                styles.pillCompact,
+                isSearchOpen && { backgroundColor: theme.surfaceContainer },
+              ]}
+            >
+              <Search size={17} color={theme.textSecondary} strokeWidth={2} />
+            </TouchableOpacity>
+          )}
+
           <View style={styles.dropdownWrapper}>
             <TouchableOpacity
               activeOpacity={0.7}
@@ -679,6 +747,52 @@ export default function WeeklyGrid() {
           </View>
         </View>
       </View>
+
+      {/* Mobile search row: full width under the top bar, where there is room to type */}
+      {!isDesktop && isSearchOpen && (
+        <View style={[styles.searchRow, { borderBottomColor: gridLineColor }]}>
+          <View style={[styles.searchField, styles.searchFieldFull, { borderColor: theme.outline }]}>
+            <View style={styles.searchIconSlot}>
+              <Search size={16} color={theme.textSecondary} strokeWidth={2} />
+            </View>
+            <TextInput
+              testID="task-search-input-mobile"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search tasks"
+              placeholderTextColor={theme.textMuted}
+              style={[styles.searchInput, { color: theme.text }]}
+              returnKeyType="search"
+              autoCorrect={false}
+              autoCapitalize="none"
+              autoFocus
+            />
+            {!!searchQuery && (
+              <TouchableOpacity activeOpacity={0.6} onPress={clearSearch} hitSlop={8}>
+                <X size={15} color={theme.textSecondary} strokeWidth={2} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* No matches for the current keyword */}
+      {hasNoSearchResults && (
+        <View testID="task-search-empty" style={styles.searchEmptyState}>
+          <Search size={20} color={theme.textMuted} strokeWidth={2} />
+          <Text style={[styles.searchEmptyTitle, { color: theme.text }]}>No tasks found</Text>
+          <Text style={[styles.searchEmptyHint, { color: theme.textMuted }]} numberOfLines={2}>
+            Nothing in this view matches “{searchQuery.trim()}”.
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={clearSearch}
+            style={[styles.pillButton, styles.searchEmptyButton, { borderColor: theme.outline }]}
+          >
+            <Text style={[styles.pillButtonText, { color: theme.text }]}>Clear search</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Error Banner */}
       {tasksError && (
@@ -918,7 +1032,8 @@ export default function WeeklyGrid() {
         </SwipeNavigator>
       )}
 
-      {!tasksLoading && tasks.length === 0 && allDayTasks.length === 0 && (
+      {/* "Nothing scheduled" prompt — suppressed while searching, which has its own empty state */}
+      {!tasksLoading && !isSearchActive(searchQuery) && tasks.length === 0 && allDayTasks.length === 0 && (
         <View style={styles.emptyStateOverlay} pointerEvents="box-none">
           <TouchableOpacity
             style={styles.emptyStateContent}
@@ -1076,6 +1191,62 @@ const styles = StyleSheet.create({
   dropdownMenuItemText: {
     fontFamily: Fonts.body,
     fontSize: 14,
+  },
+  // ── Keyword search ──
+  searchField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    width: 200,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: RoundedGeometry.full,
+  },
+  searchFieldFull: {
+    width: '100%',
+    flex: 1,
+  },
+  // Keeps the icons at their natural size; without it the input's intrinsic
+  // width squeezes the leading magnifier to zero on web.
+  searchIconSlot: {
+    flexShrink: 0,
+  },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    fontFamily: Fonts.body,
+    fontSize: 14,
+    // Strips the default focus ring the web build draws around inputs.
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' as any } : null),
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+  },
+  searchEmptyState: {
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 28,
+    paddingHorizontal: 24,
+  },
+  searchEmptyTitle: {
+    fontFamily: Fonts.headline,
+    fontSize: 17,
+    fontWeight: '500',
+  },
+  searchEmptyHint: {
+    fontFamily: Fonts.body,
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  searchEmptyButton: {
+    marginTop: 6,
+    height: 32,
+    paddingHorizontal: 14,
   },
   // ── Week / day grid ──
   timelineScroll: {
