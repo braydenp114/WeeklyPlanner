@@ -37,85 +37,87 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.background }]} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Go back">
-          <MaterialIcons name="arrow-back" size={24} color={theme.text} />
-        </TouchableOpacity>
-        <Text style={[Typography.headlineMobile, { color: theme.text }]}>Settings</Text>
-      </View>
+      <View style={styles.column}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Go back">
+            <MaterialIcons name="arrow-back" size={24} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={[Typography.headlineMobile, { color: theme.text }]}>Settings</Text>
+        </View>
 
-      <Text style={[Typography.labelMd, styles.sectionTitle, { color: theme.textSecondary }]}>Appearance</Text>
-      <View style={[styles.section, { backgroundColor: theme.surface, borderRadius: RoundedGeometry.default }]}>
-        {APPEARANCE_OPTIONS.map((option, index) => {
-          const selected = preference === option.value;
-          return (
-            <TouchableOpacity
-              key={option.value}
-              style={[
-                styles.row,
-                index > 0 && { borderTopWidth: 1, borderTopColor: theme.outlineVariant },
-              ]}
-              activeOpacity={0.7}
-              onPress={() => setPreference(option.value)}
-              accessibilityState={{ selected }}
-            >
-              <Text style={[Typography.bodyMd, { color: theme.text, flex: 1 }]}>{option.label}</Text>
-              {selected && <MaterialIcons name="check" size={20} color={theme.primaryAction} />}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-      <LocationPrivacySection />
+        <Text style={[Typography.labelMd, styles.sectionTitle, { color: theme.textSecondary }]}>Appearance</Text>
+        <View style={[styles.section, { backgroundColor: theme.surface, borderRadius: RoundedGeometry.default }]}>
+          {APPEARANCE_OPTIONS.map((option, index) => {
+            const selected = preference === option.value;
+            return (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.row,
+                  index > 0 && { borderTopWidth: 1, borderTopColor: theme.outlineVariant },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => setPreference(option.value)}
+                accessibilityState={{ selected }}
+              >
+                <Text style={[Typography.bodyMd, { color: theme.text, flex: 1 }]}>{option.label}</Text>
+                {selected && <MaterialIcons name="check" size={20} color={theme.primaryAction} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <LocationPrivacySection />
 
-      <Text style={[Typography.labelMd, styles.sectionTitle, { color: theme.textSecondary }]}>Travel & Schedule Feasibility</Text>
-      <Text style={[Typography.bodySm, { color: theme.textSecondary, marginLeft: 4, marginTop: -8, fontSize: 13 }]}>
-        Used to calculate travel time between location-based tasks and detect scheduling conflicts.
-      </Text>
-      <View style={[styles.section, { backgroundColor: theme.surface, borderRadius: RoundedGeometry.default }]}>
-        {TRAVEL_MODE_OPTIONS.map((option, index) => {
-          const selected = travelMode === option.value;
-          return (
-            <TouchableOpacity
-              key={option.value}
-              style={[
-                styles.row,
-                index > 0 && { borderTopWidth: 1, borderTopColor: theme.outlineVariant },
-              ]}
-              activeOpacity={0.7}
-              onPress={() => setTravelMode(option.value)}
-              accessibilityState={{ selected }}
-            >
-              <MaterialIcons name={option.icon} size={20} color={selected ? theme.primaryAction : theme.textSecondary} />
-              <Text style={[Typography.bodyMd, { color: theme.text, flex: 1 }]}>{option.label}</Text>
-              {selected && <MaterialIcons name="check" size={20} color={theme.primaryAction} />}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+        <Text style={[Typography.labelMd, styles.sectionTitle, { color: theme.textSecondary }]}>Travel & Schedule Feasibility</Text>
+        <Text style={[Typography.bodySm, { color: theme.textSecondary, marginLeft: 4, marginTop: -8, fontSize: 13 }]}>
+          Used to calculate travel time between location-based tasks and detect scheduling conflicts.
+        </Text>
+        <View style={[styles.section, { backgroundColor: theme.surface, borderRadius: RoundedGeometry.default }]}>
+          {TRAVEL_MODE_OPTIONS.map((option, index) => {
+            const selected = travelMode === option.value;
+            return (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.row,
+                  index > 0 && { borderTopWidth: 1, borderTopColor: theme.outlineVariant },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => setTravelMode(option.value)}
+                accessibilityState={{ selected }}
+              >
+                <MaterialIcons name={option.icon} size={20} color={selected ? theme.primaryAction : theme.textSecondary} />
+                <Text style={[Typography.bodyMd, { color: theme.text, flex: 1 }]}>{option.label}</Text>
+                {selected && <MaterialIcons name="check" size={20} color={theme.primaryAction} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-      <Text style={[Typography.labelMd, styles.sectionTitle, { color: theme.textSecondary }]}>Safety / Comfort Buffer</Text>
-      <Text style={[Typography.bodySm, { color: theme.textSecondary, marginLeft: 4, marginTop: -8, fontSize: 13 }]}>
-        Minimum buffer time desired between arrival and your next scheduled task.
-      </Text>
-      <View style={[styles.section, { backgroundColor: theme.surface, borderRadius: RoundedGeometry.default }]}>
-        {BUFFER_OPTIONS.map((option, index) => {
-          const selected = comfortBufferMinutes === option.value;
-          return (
-            <TouchableOpacity
-              key={option.value}
-              style={[
-                styles.row,
-                index > 0 && { borderTopWidth: 1, borderTopColor: theme.outlineVariant },
-              ]}
-              activeOpacity={0.7}
-              onPress={() => setComfortBufferMinutes(option.value)}
-              accessibilityState={{ selected }}
-            >
-              <Text style={[Typography.bodyMd, { color: theme.text, flex: 1 }]}>{option.label}</Text>
-              {selected && <MaterialIcons name="check" size={20} color={theme.primaryAction} />}
-            </TouchableOpacity>
-          );
-        })}
+        <Text style={[Typography.labelMd, styles.sectionTitle, { color: theme.textSecondary }]}>Safety / Comfort Buffer</Text>
+        <Text style={[Typography.bodySm, { color: theme.textSecondary, marginLeft: 4, marginTop: -8, fontSize: 13 }]}>
+          Minimum buffer time desired between arrival and your next scheduled task.
+        </Text>
+        <View style={[styles.section, { backgroundColor: theme.surface, borderRadius: RoundedGeometry.default }]}>
+          {BUFFER_OPTIONS.map((option, index) => {
+            const selected = comfortBufferMinutes === option.value;
+            return (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.row,
+                  index > 0 && { borderTopWidth: 1, borderTopColor: theme.outlineVariant },
+                ]}
+                activeOpacity={0.7}
+                onPress={() => setComfortBufferMinutes(option.value)}
+                accessibilityState={{ selected }}
+              >
+                <Text style={[Typography.bodyMd, { color: theme.text, flex: 1 }]}>{option.label}</Text>
+                {selected && <MaterialIcons name="check" size={20} color={theme.primaryAction} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
     </ScrollView>
   );
@@ -127,7 +129,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  column: {
+    width: '100%',
+    maxWidth: 640,
     gap: 16,
   },
   header: {
