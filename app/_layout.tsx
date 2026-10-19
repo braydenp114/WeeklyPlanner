@@ -1,6 +1,8 @@
 import { Stack, DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
+import { useFonts } from 'expo-font';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 
 import { AuthProvider } from '@/context/AuthContext';
 import { ThemePreferenceProvider } from '@/context/ThemePreferenceContext';
@@ -17,6 +19,10 @@ export const unstable_settings = {
 
 /** Root app layout configuring providers, background geofencing, and main stack navigation. */
 export default function RootLayout() {
+  useFonts({
+    ...MaterialIcons.font,
+  });
+
   return (
     <ThemePreferenceProvider>
       <TravelSettingsProvider>
