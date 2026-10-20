@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
-import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
-import { requestNotificationPermission } from '@/config/notifications';
-import { useAuth } from '@/context/AuthContext';
-import { getTasksForRange, Task } from '@/services/tasksService';
-import { planReminders, REMINDER_ID_PREFIX } from '@/utils/reminders';
+import { useEffect } from "react";
+import { Platform } from "react-native";
+import * as Notifications from "expo-notifications";
+import { requestNotificationPermission } from "@/config/notifications";
+import { useAuth } from "@/context/AuthContext";
+import { getTasksForRange, Task } from "@/services/tasksService";
+import { planReminders, REMINDER_ID_PREFIX } from "@/utils/reminders";
+import { planEndOfBlockPushes } from "@/utils/endOfBlock";
 
 // Show reminders as a banner and in the notification list even while the app is open
 Notifications.setNotificationHandler({
@@ -27,7 +28,7 @@ const REMINDER_WINDOW_DAYS = 14;
  * Local notifications aren't available in the browser, so this does nothing on web.
  */
 export async function syncTaskReminders(tasks: Task[]): Promise<number> {
-  if (Platform.OS === 'web') return 0;
+  if (Platform.OS === "web") return 0;
 
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
   await Promise.all(
@@ -36,7 +37,10 @@ export async function syncTaskReminders(tasks: Task[]): Promise<number> {
       .map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier)),
   );
 
-  const plan = planReminders(tasks);
+  const plan = [
+    ...planReminders(tasks),
+    ...planEndOfBlockPushes(tasks, Date.now()),
+  ];
   if (plan.length === 0) return 0;
 
   const granted = await requestNotificationPermission();
@@ -46,7 +50,10 @@ export async function syncTaskReminders(tasks: Task[]): Promise<number> {
     await Notifications.scheduleNotificationAsync({
       identifier: reminder.identifier,
       content: { title: reminder.title, body: reminder.body },
-      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: reminder.fireAt },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: reminder.fireAt,
+      },
     });
   }
   return plan.length;
@@ -57,14 +64,16 @@ export function useReminderSync(refreshKey: number) {
   const { user, loading } = useAuth();
 
   useEffect(() => {
-    if (Platform.OS === 'web' || loading || !user) return;
+    if (Platform.OS === "web" || loading || !user) return;
     let cancelled = false;
     const now = new Date();
-    const until = new Date(now.getTime() + REMINDER_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+    const until = new Date(
+      now.getTime() + REMINDER_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+    );
 
     getTasksForRange(now, until)
       .then((tasks) => (cancelled ? 0 : syncTaskReminders(tasks)))
-      .catch((e) => console.warn('[reminders] Failed to sync reminders:', e));
+      .catch((e) => console.warn("[reminders] Failed to sync reminders:", e));
 
     return () => {
       cancelled = true;
