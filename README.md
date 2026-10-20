@@ -28,7 +28,6 @@ All features listed below are verified and implemented in the codebase:
 - **Location Search**:
   - Real-time address autocomplete powered by OpenStreetMap Nominatim with fallback to Photon.
   - Captures latitude and longitude coordinates for distance and routing calculations.
-  - *(Note: Preset favorite locations is not yet merged to main; see unmerged branch `feature/preset-locations`).*
 - **Travel Time Estimation**:
   - Calculates travel duration and distance between sequential location-based tasks via a secure Google Routes API Cloud Function proxy.
   - Supports Driving (traffic-aware duration), Transit, Walking, and Two-Wheeler modes.
@@ -38,7 +37,16 @@ All features listed below are verified and implemented in the codebase:
 - **Geofence Auto-Completion**:
   - Uses `expo-location` and `expo-task-manager` to monitor task arrival geofences in the background.
   - Automatically marks tasks as completed when the user enters the target perimeter during the task window.
-  - Seamlessly falls back to manual completion on web and emulator platforms.
+  - Seamlessly falls back to manual completion on web and emulator platforms. Arrival detection and auto-mark by task type (below) still run on web.
+- **Preset Locations & Arrival Detection**:
+  - Preset shared locations (campus, gym and others) selectable as chips in the New Task modal.
+  - Arrival detection compares the user's location with the presets and logs each arrival. It runs in the foreground on native and on web.
+  - Arrival push notification when the user arrives at a preset location.
+  - Auto-mark by task type: arriving at a preset completes a task of the same location type when the time is inside its completion window (`completedBy: 'arrival'`).
+  - End-of-block push asking "Did you finish ...?" when a task block ends, so the user can confirm or correct the status. Auto-marked tasks are included.
+- **Location Privacy**:
+  - Settings toggle to turn location sharing off.
+  - Button to delete location history.
 - **Focus Timer & Task Rollover**:
   - Persistent bottom `FocusBar` tracking active task time and remaining countdown.
   - Overnight banner offering to roll over unfinished tasks from yesterday into today.
@@ -93,7 +101,7 @@ WeeklyPlanner/
 │   ├── +html.tsx                # Web HTML document shell
 │   ├── _layout.tsx              # Root stack router, theme provider & auth wrapper
 │   ├── login.tsx                # Google Sign-In screen
-│   └── settings.tsx             # User settings (theme, travel mode, buffer time)
+│   └── settings.tsx             # User settings (theme, travel mode, buffer time, location sharing)
 ├── assets/                      # Application icons and splash screen images
 │   └── images/                  # App icon, favicon, and adaptive android icons
 ├── components/                  # Reusable UI components
@@ -120,6 +128,7 @@ WeeklyPlanner/
 │   ├── firebase.ts              # Firebase client SDK initialization
 │   └── notifications.ts         # Notification handler configuration
 ├── constants/
+│   ├── presetLocations.ts       # Preset shared locations and their types
 │   └── theme.ts                 # Shared design tokens, color palettes, and fonts
 ├── context/                     # React Context providers
 │   ├── AuthContext.tsx          # User session & Google Sign-In state
@@ -135,6 +144,7 @@ WeeklyPlanner/
 │   ├── package.json             # Backend dependencies (Node 22)
 │   └── tsconfig.json            # Backend TypeScript configuration
 ├── hooks/                       # Custom React hooks
+│   ├── use-arrival-detection.ts # Arrival check, log, push, and auto-mark
 │   ├── use-color-scheme.ts      # Native color scheme detection
 │   ├── use-color-scheme.web.ts  # Web color scheme detection
 │   └── use-task-reminders.ts    # Background task reminder notification sync
@@ -149,8 +159,11 @@ WeeklyPlanner/
 │   ├── travelTimeService.ts     # Client travel time cache and Cloud Function caller
 │   └── weatherService.ts        # Open-Meteo weather service for tasks
 ├── utils/                       # Pure utility functions and algorithms
+│   ├── autoMark.ts              # Auto-mark rule: location type match inside the completion window
+│   ├── endOfBlock.ts            # Plans the end-of-block confirm pushes
 │   ├── expandRecurrences.ts     # Occurrence date generator for recurring series
 │   ├── focus.ts                 # Focus session time formatting helpers
+│   ├── geo.ts                   # Distance, preset matching, and arrival detection
 │   ├── geofenceWindow.ts        # Time-window bounds for geofence completion
 │   ├── priority.ts              # Priority sorting and color helpers
 │   ├── reflection.ts            # Reflection date helpers
@@ -198,7 +211,7 @@ export interface Task {
   seriesId?: string;
   completed?: boolean;
   completedAt?: Timestamp | null;
-  completedBy?: 'manual' | 'geofence' | null;
+  completedBy?: 'manual' | 'geofence' | 'arrival' | null;
   geofenceRadiusMeters?: number;
   hasChecklist?: boolean;
   checklistItems?: ChecklistItem[];
@@ -262,17 +275,17 @@ Create a `.env` file in the project root with the following variables (values sh
 ### 3. Running Locally
 
 - **Web Browser**:
-  ```bash
+```bash
   npm run web
-  ```
+```
 - **Android Emulator / Device**:
-  ```bash
+```bash
   npm run android
-  ```
+```
 - **iOS Simulator**:
-  ```bash
+```bash
   npm run ios
-  ```
+```
 
 ---
 
@@ -294,13 +307,13 @@ The travel time estimation function requires a Google Maps Routes API key stored
 
 1. Enable the **Routes API** in your Google Cloud Console.
 2. Set the secret in Firebase Secret Manager:
-   ```bash
+```bash
    firebase functions:secrets:set ROUTES_API_KEY
-   ```
+```
 3. Deploy Cloud Functions:
-   ```bash
+```bash
    firebase deploy --only functions
-   ```
+```
 
 ---
 
@@ -315,9 +328,9 @@ Android builds are managed using [Expo Application Services (EAS Build)](https:/
 ### Manual Configuration Steps
 1. **Google Sign-In SHA-1**:
    Retrieve your EAS Android keystore SHA-1 fingerprint via:
-   ```bash
+```bash
    npx eas-cli credentials
-   ```
+```
    Add both your local debug keystore SHA-1 and the EAS build keystore SHA-1 to your Android OAuth Client in the Google Cloud Console / Firebase Console.
 2. **`google-services.json` Generation**:
    The `scripts/generate-google-services.js` script automatically generates `google-services.json` from the environment variables prior to every native build (`npm run prestart`). In EAS CI builds, configure the environment variables as EAS Secrets.
@@ -341,17 +354,18 @@ Android builds are managed using [Expo Application Services (EAS Build)](https:/
 ## Testing & Quality Assurance
 
 - **Type Checking**:
-  ```bash
+```bash
   npx tsc --noEmit
-  ```
+```
 - **Linting**:
-  ```bash
+```bash
   npm run lint
-  ```
+```
 - **Unit Tests**:
-  ```bash
+```bash
   npx jest
-  ```
+```
+  The suite has 146 tests across 17 suites. The `geo`, `autoMark`, and `endOfBlock` suites were written test-first.
 - **CI Pipeline**:
   GitHub Actions workflow (`.github/workflows/ci.yml`) runs linting and type-checking on all pushes and pull requests targeting `main`.
 
@@ -361,7 +375,6 @@ Android builds are managed using [Expo Application Services (EAS Build)](https:/
 
 - **Native-Only Background Features**: Geofencing (`expo-location` background monitoring) requires a physical Android or iOS device and is gracefully disabled in web browser environments.
 - **Device Calendar Sync**: *(TODO: confirm)* Native calendar synchronization (`expo-calendar`) is currently under development on a feature branch and is not yet merged to `main`.
-- **Preset Locations**: *(TODO: confirm)* Pre-saved favorite locations are currently on unmerged branch `feature/preset-locations`.
 - **Firebase App Check**: Enforcement is currently disabled (`enforceAppCheck: false`) on the Cloud Function until native Play Integrity app attestation is configured.
 
 ---
@@ -377,3 +390,4 @@ Android builds are managed using [Expo Application Services (EAS Build)](https:/
   2. Ensure `npx tsc --noEmit`, `npm run lint`, and `npm test` all pass.
   3. Submit a Pull Request targeting `main`.
   4. Ensure GitHub Actions CI passes before merging.
+- **Release Branch**: The final Sprint 2 code is on the `Release` branch, created from `main`.
