@@ -326,14 +326,20 @@ Android builds are managed using [Expo Application Services (EAS Build)](https:/
 - `production`: Store release build (output: `.aab` Android App Bundle).
 
 ### Manual Configuration Steps
-1. **Google Sign-In SHA-1**:
-   Retrieve your EAS Android keystore SHA-1 fingerprint via:
+
+**1. Google Sign-In SHA-1**
+
+Retrieve your EAS Android keystore SHA-1 fingerprint via:
+
 ```bash
-   npx eas-cli credentials
+npx eas-cli credentials
 ```
-   Add both your local debug keystore SHA-1 and the EAS build keystore SHA-1 to your Android OAuth Client in the Google Cloud Console / Firebase Console.
-2. **`google-services.json` Generation**:
-   The `scripts/generate-google-services.js` script automatically generates `google-services.json` from the environment variables prior to every native build (`npm run prestart`). In EAS CI builds, configure the environment variables as EAS Secrets.
+
+Add both your local debug keystore SHA-1 and the EAS build keystore SHA-1 to your Android OAuth Client in the Google Cloud Console / Firebase Console.
+
+**2. `google-services.json` Generation**
+
+The `scripts/generate-google-services.js` script automatically generates `google-services.json` from the environment variables prior to every native build (`npm run prestart`). In EAS CI builds, configure the environment variables as EAS Secrets.
 
 ---
 
