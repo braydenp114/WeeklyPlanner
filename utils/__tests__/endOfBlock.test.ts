@@ -81,4 +81,21 @@ describe("planEndOfBlockPushes", () => {
       planEndOfBlockPushes([makeTask({ endDate: undefined })], NOW),
     ).toEqual([]);
   });
+
+  it("still asks about a task that was auto-marked done", () => {
+    const plan = planEndOfBlockPushes(
+      [makeTask({ completed: true, completedBy: "arrival" })],
+      NOW,
+    );
+    expect(plan).toHaveLength(1);
+  });
+
+  it("skips a task the user marked done by hand", () => {
+    expect(
+      planEndOfBlockPushes(
+        [makeTask({ completed: true, completedBy: "manual" })],
+        NOW,
+      ),
+    ).toEqual([]);
+  });
 });
